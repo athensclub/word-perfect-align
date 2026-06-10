@@ -3,3 +3,8 @@ compatibility_date = "2025-01-01"
 
 [assets]
 directory = "."
+# Serve files at their exact paths. Without this, Wrangler's default
+# "auto-trailing-slash" 307-redirects /src/taskpane.html -> /src/taskpane,
+# which breaks the Office.js task-pane initialization handshake (blank pane).
+html_handling = "none"
+not_found_handling = "none"
