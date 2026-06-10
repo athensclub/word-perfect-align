@@ -1,3 +1,4 @@
+// @ts-check
 /*
  * taskpane.js
  * -----------
@@ -43,6 +44,19 @@
   var liveAlignTimer = null; // debounce handle for real-time slider dragging
 
   // ---------------------------------------------------------------------------
+  // Typed DOM accessors — keep `// @ts-check` happy (and document element types)
+  // without scattering casts through the code.
+  // ---------------------------------------------------------------------------
+  /** @param {string} id @returns {HTMLInputElement} */
+  function getInput(id) {
+    return /** @type {HTMLInputElement} */ (document.getElementById(id));
+  }
+  /** @param {string} id @returns {HTMLButtonElement} */
+  function getButton(id) {
+    return /** @type {HTMLButtonElement} */ (document.getElementById(id));
+  }
+
+  // ---------------------------------------------------------------------------
   // Office bootstrap
   // ---------------------------------------------------------------------------
   // Guarded so the module can be `require()`d in a plain Node test runner
@@ -51,7 +65,7 @@
     Office.onReady(function (info) {
       // Only wire up the UI inside Word.
       if (info.host === Office.HostType.Word) {
-        var button = document.getElementById("align-button");
+        var button = getButton("align-button");
         button.disabled = false;
         button.addEventListener("click", function () {
           alignSelection({ silent: false });
@@ -59,7 +73,7 @@
 
         // Starting-indent slider: update the label + live-preview on drag,
         // and commit a (debounced) re-align so the change is visible in real time.
-        var slider = document.getElementById("indent-slider");
+        var slider = getInput("indent-slider");
         if (slider) {
           slider.addEventListener("input", function () {
             baseIndentPoints = Number(slider.value);
@@ -146,10 +160,11 @@
   /**
    * Compute the indent layout for a list of paragraphs.
    *
-   * @param {Array<{isList:boolean, level:number, listString:string}>} paras
+   * @param {Array<{isList:boolean, level?:number, listString?:string}>} paras
    *        One entry per paragraph in document order. `isList:false` marks a
-   *        non-list paragraph (left untouched). `level` is Word's 0-indexed
-   *        list level; `listString` is the rendered marker ("1.", "a.", "•").
+   *        non-list paragraph (left untouched; `level`/`listString` omitted).
+   *        `level` is Word's 0-indexed list level; `listString` is the rendered
+   *        marker ("1.", "a.", "•").
    * @param {number} [baseIndent=0]
    *        Starting indent (points) for the outermost layer (level 0). The
    *        whole list shifts right by this amount, preserving relative
@@ -267,7 +282,7 @@
 
   /** Reflect the current base indent (points) in the slider + inches label. */
   function updateIndentLabel() {
-    var slider = document.getElementById("indent-slider");
+    var slider = getInput("indent-slider");
     var label = document.getElementById("indent-value");
     if (slider) slider.value = String(baseIndentPoints);
     if (label) label.textContent = (baseIndentPoints / POINTS_PER_INCH).toFixed(2) + '"';
@@ -316,7 +331,7 @@
         var start = left + first; // where the first line visually begins
 
         // Clamp into the slider's range so the thumb stays in view.
-        var slider = document.getElementById("indent-slider");
+        var slider = getInput("indent-slider");
         var max = slider ? Number(slider.max) : 216;
         var pts = Math.max(0, Math.min(max, start));
         baseIndentPoints = pts;
@@ -358,7 +373,7 @@
    */
   function alignSelection(opts) {
     var silent = opts && opts.silent;
-    var button = document.getElementById("align-button");
+    var button = getButton("align-button");
     if (!silent) {
       button.disabled = true;
       setStatus("Aligning…", "");

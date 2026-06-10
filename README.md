@@ -109,6 +109,19 @@ the constant-gap buffer, perfect vertical alignment, orphan-bullet
 re-parenting, the hanging-indent math, and non-list edge cases. Run them before
 committing any change to the algorithm.
 
+### Type-checking (no build step)
+
+The source stays plain `.js` and is served raw — there is **no transpile step**.
+Type-safety comes from `// @ts-check` + JSDoc, checked against `@types/office-js`:
+
+```bash
+npm run typecheck
+```
+
+This catches Office.js API typos and property mistakes (and powers editor
+autocomplete) without ever emitting compiled output (`tsconfig.json` sets
+`noEmit`).
+
 ## Sideload in Word on the web (SharePoint / Microsoft 365)
 
 1. Make sure the dev server is running (`npm start`).

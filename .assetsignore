@@ -12,3 +12,4 @@ LICENSE
 .wranglerignore
 .assetsignore
 wrangler.toml
+tsconfig.json

@@ -10,10 +10,14 @@
     "start": "office-addin-dev-certs install && node server.js",
     "serve": "node server.js",
     "test": "node --test",
+    "typecheck": "tsc -p tsconfig.json",
     "validate": "office-addin-manifest validate manifest.xml"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/office-js": "^1.0.0",
     "office-addin-dev-certs": "^1.13.0",
-    "office-addin-manifest": "^1.13.0"
+    "office-addin-manifest": "^1.13.0",
+    "typescript": "^5.6.0"
   }
 }

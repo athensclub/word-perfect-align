@@ -1,0 +1,21 @@
+{
+  // Type-CHECK only — never emits JS. The source stays plain .js and is served
+  // raw (no build step). This gives editor/CI type-safety on the Office.js API
+  // and catches property/typo mistakes, driven by per-file `// @ts-check`.
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["ES2017", "DOM"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    // Pragmatic for an existing no-build codebase: keep the high-value Office.js
+    // and property checks without forcing annotations on every local/param.
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "types": ["office-js", "node"]
+  },
+  "include": ["src/**/*.js", "test/**/*.js"]
+}
