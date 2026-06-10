@@ -27,15 +27,20 @@
   var POINTS_PER_INCH = 72;
 
   // Bullets ("•", "-", "▪", ...) get a small, fixed gap before their text.
-  var BULLET_BUFFER_INCHES = 0.13; // ~9 pt — bullet glyph + a hair of breathing room
+  var BULLET_BUFFER_INCHES = 0.11; // ~8 pt — bullet glyph + a hair of breathing room
 
   // Numbered/lettered items ("1.", "1.1.1.", "a.") get a length-aware gap.
   // NUMBER_PER_CHAR ≈ the rendered width of one number glyph, so the buffer
   // grows just enough to clear the number string — which keeps the VISIBLE
   // gap between the number and its text constant (== NUMBER_BASE) no matter how
   // long the number is. NUMBER_BASE is therefore the actual gap after the number.
-  var NUMBER_BASE_INCHES = 0.06; // ~4 pt — tight gap after the number
+  var NUMBER_BASE_INCHES = 0.04; // ~3 pt — very tight gap after the number
   var NUMBER_PER_CHAR_INCHES = 0.07; // ~5 pt/char ≈ glyph width at ~11pt font
+
+  // The configurable starting indent for the outermost layer, in POINTS.
+  // Driven by the slider / "copy from selection" controls in the task pane.
+  var baseIndentPoints = 0;
+  var liveAlignTimer = null; // debounce handle for real-time slider dragging
 
   // ---------------------------------------------------------------------------
   // Office bootstrap
@@ -48,7 +53,29 @@
       if (info.host === Office.HostType.Word) {
         var button = document.getElementById("align-button");
         button.disabled = false;
-        button.addEventListener("click", alignSelection);
+        button.addEventListener("click", function () {
+          alignSelection({ silent: false });
+        });
+
+        // Starting-indent slider: update the label + live-preview on drag,
+        // and commit a (debounced) re-align so the change is visible in real time.
+        var slider = document.getElementById("indent-slider");
+        if (slider) {
+          slider.addEventListener("input", function () {
+            baseIndentPoints = Number(slider.value);
+            updateIndentLabel();
+            scheduleLiveAlign();
+          });
+        }
+
+        // "Copy from selection": read the indent of the currently-selected
+        // paragraph (e.g. a heading) and adopt it as the starting indent.
+        var copyBtn = document.getElementById("copy-indent-button");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", copyIndentFromSelection);
+        }
+
+        updateIndentLabel();
       }
     });
   }
@@ -123,6 +150,11 @@
    *        One entry per paragraph in document order. `isList:false` marks a
    *        non-list paragraph (left untouched). `level` is Word's 0-indexed
    *        list level; `listString` is the rendered marker ("1.", "a.", "•").
+   * @param {number} [baseIndent=0]
+   *        Starting indent (points) for the outermost layer (level 0). The
+   *        whole list shifts right by this amount, preserving relative
+   *        alignment — e.g. set it to a heading's leftIndent so the list
+   *        starts flush under the heading.
    * @returns {{
    *   results: Array<null|{level:number, isBullet:boolean, alignment:number,
    *                        textIndent:number, leftIndent:number,
@@ -132,7 +164,8 @@
    *   `results[i]` is null for skipped (non-list) paragraphs, otherwise the
    *   computed indents in points for paragraph i.
    */
-  function computeLayout(paras) {
+  function computeLayout(paras, baseIndent) {
+    var base = baseIndent || 0; // starting indent (points) for level 0
     var textIndentByLevel = {}; // effective level -> text indent (points)
     var results = [];
     var aligned = 0;
@@ -181,13 +214,13 @@
 
       // Alignment = where this layer's number/bullet sits.
       // It must equal the text indent of the layer directly above it.
-      // (Level 0 starts flush at the left margin.)
+      // Level 0 starts at the configured base indent (default 0 = left margin).
       var alignment =
         level === 0
-          ? 0
+          ? base
           : typeof textIndentByLevel[level - 1] === "number"
           ? textIndentByLevel[level - 1]
-          : 0; // no parent seen yet -> flush
+          : base; // no parent seen yet -> fall back to the base indent
 
       // Dynamic buffer based on bullet vs number, and number length.
       var buffer = computeBufferPoints(p.listString);
@@ -229,14 +262,75 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Starting-indent controls
+  // ---------------------------------------------------------------------------
+
+  /** Reflect the current base indent (points) in the slider + inches label. */
+  function updateIndentLabel() {
+    var slider = document.getElementById("indent-slider");
+    var label = document.getElementById("indent-value");
+    if (slider) slider.value = String(baseIndentPoints);
+    if (label) label.textContent = (baseIndentPoints / POINTS_PER_INCH).toFixed(2) + '"';
+  }
+
+  /**
+   * Debounced re-align while dragging the slider, so the document updates in
+   * (near) real time without firing a Word.run on every pixel of movement.
+   */
+  function scheduleLiveAlign() {
+    if (liveAlignTimer) clearTimeout(liveAlignTimer);
+    liveAlignTimer = setTimeout(function () {
+      liveAlignTimer = null;
+      alignSelection({ silent: true });
+    }, 120);
+  }
+
+  /**
+   * Read the left indent of the first paragraph in the current selection
+   * (e.g. a heading) and adopt it as the starting indent for the list.
+   */
+  function copyIndentFromSelection() {
+    setStatus("Reading indent from selection…", "");
+    Word.run(function (context) {
+      var para = context.document.getSelection().paragraphs.getFirstOrNullObject();
+      para.load("leftIndent,isNullObject");
+      return context.sync().then(function () {
+        if (para.isNullObject) {
+          setStatus("Select a paragraph (e.g. the heading) first.", "warn");
+          return;
+        }
+        // Clamp to the slider's range so the thumb stays in view.
+        var pts = Math.max(0, Math.min(144, para.leftIndent || 0));
+        baseIndentPoints = pts;
+        updateIndentLabel();
+        setStatus(
+          'Starting indent set to ' +
+            (pts / POINTS_PER_INCH).toFixed(2) +
+            '" from the selection. Now select your list and click Align.',
+          "ok"
+        );
+      });
+    }).catch(reportError);
+  }
+
+  // ---------------------------------------------------------------------------
   // Main action
   // ---------------------------------------------------------------------------
-  function alignSelection() {
-    var button = document.getElementById("align-button");
-    button.disabled = true;
-    setStatus("Aligning…", "");
 
-    Word.run(function (context) {
+  /**
+   * Align the current selection's list.
+   * @param {{silent?:boolean}} [opts] When silent, suppress the chatty status
+   *        text (used for live slider re-aligns) and don't toggle the button.
+   */
+  function alignSelection(opts) {
+    var silent = opts && opts.silent;
+    var button = document.getElementById("align-button");
+    if (!silent) {
+      button.disabled = true;
+      setStatus("Aligning…", "");
+    }
+
+    return Word.run(function (context) {
       // 1) Get the paragraphs in the current selection.
       var paragraphs = context.document.getSelection().paragraphs;
       paragraphs.load("items");
@@ -245,7 +339,9 @@
         var items = paragraphs.items;
 
         if (!items || items.length === 0) {
-          setStatus("No text is selected. Highlight your list first.", "warn");
+          if (!silent) {
+            setStatus("No text is selected. Highlight your list first.", "warn");
+          }
           return context.sync(); // nothing to do
         }
 
@@ -258,14 +354,15 @@
         });
 
         return context.sync().then(function () {
-          // 3) Build a plain-data snapshot, then run the pure layout algorithm.
+          // 3) Build a plain-data snapshot, then run the pure layout algorithm
+          //    starting from the configured base indent.
           var paras = listItems.map(function (li) {
             return li.isNullObject
               ? { isList: false }
               : { isList: true, level: li.level || 0, listString: li.listString };
           });
 
-          var layout = computeLayout(paras);
+          var layout = computeLayout(paras, baseIndentPoints);
 
           // 4) Apply the computed hanging indents back onto the paragraphs.
           for (var i = 0; i < layout.results.length; i++) {
@@ -277,6 +374,7 @@
 
           // 5) Single sync to push all indentation changes at once.
           return context.sync().then(function () {
+            if (silent) return;
             var msg =
               "Aligned " +
               layout.aligned +
@@ -286,7 +384,9 @@
               (layout.maxLevel + 1) +
               " level" +
               (layout.maxLevel === 0 ? "" : "s") +
-              ".";
+              " (start " +
+              (baseIndentPoints / POINTS_PER_INCH).toFixed(2) +
+              '").';
             if (layout.skipped > 0) {
               msg +=
                 "\nSkipped " +
@@ -299,18 +399,19 @@
           });
         });
       });
-    }).catch(function (error) {
-      // Surface Office/OfficeExtension errors to the user.
-      var detail = error && error.message ? error.message : String(error);
-      if (error && error.debugInfo) {
-        detail += "\n(" + JSON.stringify(error.debugInfo) + ")";
-      }
-      setStatus("Something went wrong: " + detail, "err");
-      // Also log for the dev console.
-      console.error("Perfect Align error:", error);
-    }).then(function () {
-      button.disabled = false;
+    }).catch(reportError).then(function () {
+      if (!silent) button.disabled = false;
     });
+  }
+
+  /** Shared error reporter for Office/OfficeExtension failures. */
+  function reportError(error) {
+    var detail = error && error.message ? error.message : String(error);
+    if (error && error.debugInfo) {
+      detail += "\n(" + JSON.stringify(error.debugInfo) + ")";
+    }
+    setStatus("Something went wrong: " + detail, "err");
+    console.error("Perfect Align error:", error);
   }
 
   // Expose helpers + the pure algorithm for unit testing, without breaking the

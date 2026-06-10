@@ -89,6 +89,59 @@
     #status.warn { color: var(--warn); }
     #status.err  { color: var(--err); }
 
+    /* Starting-indent control group */
+    .control-group {
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #edebe9;
+      border-radius: 4px;
+      background: #fff;
+    }
+    .control-group .label-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .control-group .label-row label {
+      font-weight: 600;
+      font-size: 13px;
+    }
+    #indent-value {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--fluent-blue);
+    }
+    /* Slider styled to Fluent blue */
+    input[type="range"] {
+      width: 100%;
+      margin: 4px 0 12px;
+      accent-color: var(--fluent-blue);
+      cursor: pointer;
+    }
+    /* Secondary (outline) button */
+    button.fluent-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 16px;
+      border: 1px solid #8a8886;
+      border-radius: 2px;
+      background: #fff;
+      color: var(--neutral-fg);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.1s ease, border-color 0.1s ease;
+    }
+    button.fluent-secondary:hover:not(:disabled) {
+      background: #f3f2f1;
+      border-color: var(--neutral-fg);
+    }
+
     .hint {
       margin-top: 24px;
       padding-top: 16px;
@@ -106,6 +159,26 @@
     sits exactly under the text of the layer above it.
   </p>
 
+  <div class="control-group">
+    <div class="label-row">
+      <label for="indent-slider">Starting indent</label>
+      <span id="indent-value">0.00"</span>
+    </div>
+    <!-- Range is in points (0–144 pt = 0–2.0"). Step 0.5 pt for fine control. -->
+    <input
+      type="range"
+      id="indent-slider"
+      min="0"
+      max="144"
+      step="0.5"
+      value="0"
+      aria-label="Starting indent in points"
+    />
+    <button id="copy-indent-button" class="fluent-secondary" type="button">
+      Copy indent from selection
+    </button>
+  </div>
+
   <button id="align-button" class="fluent-primary" disabled>
     Perfectly Align Selection
   </button>
@@ -113,8 +186,12 @@
   <div id="status" role="status" aria-live="polite"></div>
 
   <div class="hint">
-    Tip: Highlight all the list paragraphs you want to align before clicking.
-    Paragraphs that aren't part of a list are left untouched.
+    <strong>Starting indent</strong> shifts the whole list so the outermost
+    layer begins at that position — drag the slider to preview live, or click
+    <em>Copy indent from selection</em> with a heading selected to match it.
+    <br /><br />
+    Then highlight all the list paragraphs and click
+    <em>Perfectly Align Selection</em>. Non-list paragraphs are left untouched.
   </div>
 
   <!-- Add-in logic. -->

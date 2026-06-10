@@ -184,6 +184,45 @@ test("computeLayout: number after bullets returns to its own Word level", () => 
 });
 
 // --------------------------------------------------------------------------
+// computeLayout — starting (base) indent
+// --------------------------------------------------------------------------
+test("computeLayout: baseIndent shifts level 0 to the given start", () => {
+  const base = 36; // 0.5"
+  const { results } = computeLayout([num("1.", 0)], base);
+  assert.equal(results[0].alignment, base);
+  // text indent = base + buffer
+  assert.ok(approx(results[0].textIndent, base + computeBufferPoints("1.")));
+});
+
+test("computeLayout: baseIndent shifts the whole tree but preserves relative alignment", () => {
+  const paras = [num("1.", 0), num("1.1.", 1), bul("•", 0)];
+  const a = computeLayout(paras, 0).results;
+  const b = computeLayout(paras, 50).results;
+  for (let i = 0; i < paras.length; i++) {
+    // Every position is shifted right by exactly the base offset...
+    assert.ok(approx(b[i].alignment, a[i].alignment + 50));
+    assert.ok(approx(b[i].textIndent, a[i].textIndent + 50));
+    // ...and the hanging-indent (the gap) is unchanged.
+    assert.ok(approx(b[i].firstLineIndent, a[i].firstLineIndent));
+  }
+});
+
+test("computeLayout: the vertical-alignment invariant still holds with a base offset", () => {
+  const { results } = computeLayout(
+    [num("1.", 0), num("1.1.", 1), num("1.1.1.", 2)],
+    72
+  );
+  assert.equal(results[0].alignment, 72);
+  assert.ok(approx(results[1].alignment, results[0].textIndent));
+  assert.ok(approx(results[2].alignment, results[1].textIndent));
+});
+
+test("computeLayout: omitted baseIndent defaults to 0 (back-compat)", () => {
+  const { results } = computeLayout([num("1.", 0)]);
+  assert.equal(results[0].alignment, 0);
+});
+
+// --------------------------------------------------------------------------
 // computeLayout — bookkeeping & edge cases
 // --------------------------------------------------------------------------
 test("computeLayout: non-list paragraphs are skipped (null result, untouched)", () => {
