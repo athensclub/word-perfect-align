@@ -40,14 +40,18 @@
   // ---------------------------------------------------------------------------
   // Office bootstrap
   // ---------------------------------------------------------------------------
-  Office.onReady(function (info) {
-    // Only wire up the UI inside Word.
-    if (info.host === Office.HostType.Word) {
-      var button = document.getElementById("align-button");
-      button.disabled = false;
-      button.addEventListener("click", alignSelection);
-    }
-  });
+  // Guarded so the module can be `require()`d in a plain Node test runner
+  // (where Office.js is absent) without throwing — tests target the pure logic.
+  if (typeof Office !== "undefined" && Office.onReady) {
+    Office.onReady(function (info) {
+      // Only wire up the UI inside Word.
+      if (info.host === Office.HostType.Word) {
+        var button = document.getElementById("align-button");
+        button.disabled = false;
+        button.addEventListener("click", alignSelection);
+      }
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Small pure helpers (modular + unit-testable)
@@ -60,8 +64,12 @@
 
   /**
    * Decide whether a list string represents a BULLET (symbol) vs a
-   * NUMBER/LETTER sequence. If the trimmed string contains any digit or
-   * latin letter we treat it as numbered/lettered; otherwise it's a bullet.
+   * NUMBER/LETTER sequence.
+   *
+   * Word number/letter markers either contain a digit ("1.", "1.1.1.", "10)")
+   * or are a letter/roman run ending in a delimiter ("a.", "iv.", "B)"). Bare
+   * symbols with no delimiter ("•", "-", "▪", "o", "*", "◦") are bullets — note
+   * "o" is the hollow Word bullet, distinct from the lettered marker "o.".
    * Empty / missing strings fall back to "bullet" (the conservative, small gap).
    */
   function isBulletString(listString) {
@@ -69,7 +77,13 @@
     if (s.length === 0) {
       return true; // unknown -> treat as bullet
     }
-    return !/[0-9A-Za-z]/.test(s);
+    if (/[0-9]/.test(s)) {
+      return false; // any digit -> numbered
+    }
+    if (/[.)\]]$/.test(s)) {
+      return false; // letter/roman marker ending in a delimiter -> lettered
+    }
+    return true; // bare symbol or single letter without delimiter -> bullet
   }
 
   /**
@@ -96,6 +110,113 @@
   function applyHangingIndent(paragraph, alignmentPoints, textIndentPoints) {
     paragraph.leftIndent = textIndentPoints;
     paragraph.firstLineIndent = -(textIndentPoints - alignmentPoints);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Core algorithm (PURE — no Office.js dependency, fully unit-testable)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Compute the indent layout for a list of paragraphs.
+   *
+   * @param {Array<{isList:boolean, level:number, listString:string}>} paras
+   *        One entry per paragraph in document order. `isList:false` marks a
+   *        non-list paragraph (left untouched). `level` is Word's 0-indexed
+   *        list level; `listString` is the rendered marker ("1.", "a.", "•").
+   * @returns {{
+   *   results: Array<null|{level:number, isBullet:boolean, alignment:number,
+   *                        textIndent:number, leftIndent:number,
+   *                        firstLineIndent:number}>,
+   *   aligned:number, skipped:number, maxLevel:number
+   * }}
+   *   `results[i]` is null for skipped (non-list) paragraphs, otherwise the
+   *   computed indents in points for paragraph i.
+   */
+  function computeLayout(paras) {
+    var textIndentByLevel = {}; // effective level -> text indent (points)
+    var results = [];
+    var aligned = 0;
+    var skipped = 0;
+    var maxLevel = 0;
+
+    // Track the previous list item so we can re-parent "orphan" bullets.
+    // In chaotic docs, Word often reports stray bullets at level 0 even
+    // though they visually belong under the (deeper) item above them.
+    var prevLevel = -1; // effective level of the previous list item
+    var prevWasBullet = false;
+
+    for (var i = 0; i < paras.length; i++) {
+      var p = paras[i];
+
+      // Edge case: paragraph isn't part of a list -> leave it untouched.
+      if (!p || !p.isList) {
+        results.push(null);
+        skipped++;
+        continue;
+      }
+
+      var bullet = isBulletString(p.listString);
+      var wordLevel = p.level || 0; // 0-indexed depth reported by Word
+
+      // Effective level:
+      //  - Numbers/letters: trust Word's level (it's reliable for them).
+      //  - Bullets: place ONE layer below the item directly above.
+      //      * first bullet after a number  -> prevLevel + 1
+      //      * bullet after a bullet         -> same level (siblings)
+      //    Fall back to Word's level only when there's no item above.
+      var level;
+      if (!bullet) {
+        level = wordLevel;
+      } else if (prevLevel < 0) {
+        level = wordLevel; // first item in selection, nothing to nest under
+      } else if (prevWasBullet) {
+        level = prevLevel; // consecutive bullets are siblings
+      } else {
+        level = prevLevel + 1; // first bullet under a numbered/lettered item
+      }
+
+      if (level > maxLevel) maxLevel = level;
+      prevLevel = level;
+      prevWasBullet = bullet;
+
+      // Alignment = where this layer's number/bullet sits.
+      // It must equal the text indent of the layer directly above it.
+      // (Level 0 starts flush at the left margin.)
+      var alignment =
+        level === 0
+          ? 0
+          : typeof textIndentByLevel[level - 1] === "number"
+          ? textIndentByLevel[level - 1]
+          : 0; // no parent seen yet -> flush
+
+      // Dynamic buffer based on bullet vs number, and number length.
+      var buffer = computeBufferPoints(p.listString);
+
+      // Text indent = where this layer's text sits.
+      var textIndent = alignment + buffer;
+      textIndentByLevel[level] = textIndent;
+
+      // Any deeper levels recorded earlier are now stale (we've moved up
+      // or to a new branch); clear them so a later child recomputes
+      // against the current ancestry rather than an old sibling subtree.
+      for (var deeper in textIndentByLevel) {
+        if (Number(deeper) > level) {
+          delete textIndentByLevel[deeper];
+        }
+      }
+
+      results.push({
+        level: level,
+        isBullet: bullet,
+        alignment: alignment,
+        textIndent: textIndent,
+        leftIndent: textIndent,
+        firstLineIndent: -(textIndent - alignment),
+      });
+      aligned++;
+    }
+
+    return { results: results, aligned: aligned, skipped: skipped, maxLevel: maxLevel };
   }
 
   // ---------------------------------------------------------------------------
@@ -137,103 +258,44 @@
         });
 
         return context.sync().then(function () {
-          // 3) Walk top-to-bottom, accumulating the text indent per level.
-          var textIndentByLevel = {}; // level (number) -> text indent in points
-          var aligned = 0;
-          var skipped = 0;
-          var maxLevel = 0;
+          // 3) Build a plain-data snapshot, then run the pure layout algorithm.
+          var paras = listItems.map(function (li) {
+            return li.isNullObject
+              ? { isList: false }
+              : { isList: true, level: li.level || 0, listString: li.listString };
+          });
 
-          // Track the previous list item so we can re-parent "orphan" bullets.
-          // In chaotic docs, Word often reports stray bullets at level 0 even
-          // though they visually belong under the (deeper) item above them.
-          var prevLevel = -1; // effective level of the previous list item
-          var prevWasBullet = false;
+          var layout = computeLayout(paras);
 
-          for (var i = 0; i < items.length; i++) {
-            var li = listItems[i];
-
-            // Edge case: paragraph isn't part of a list -> leave it untouched.
-            if (li.isNullObject) {
-              skipped++;
-              continue;
+          // 4) Apply the computed hanging indents back onto the paragraphs.
+          for (var i = 0; i < layout.results.length; i++) {
+            var r = layout.results[i];
+            if (r) {
+              applyHangingIndent(items[i], r.alignment, r.textIndent);
             }
-
-            var bullet = isBulletString(li.listString);
-            var wordLevel = li.level || 0; // 0-indexed depth reported by Word
-
-            // Effective level:
-            //  - Numbers/letters: trust Word's level (it's reliable for them).
-            //  - Bullets: place ONE layer below the item directly above.
-            //      * first bullet after a number  -> prevLevel + 1
-            //      * bullet after a bullet         -> same level (siblings)
-            //    Fall back to Word's level only when there's no item above.
-            var level;
-            if (!bullet) {
-              level = wordLevel;
-            } else if (prevLevel < 0) {
-              level = wordLevel; // first item in selection, nothing to nest under
-            } else if (prevWasBullet) {
-              level = prevLevel; // consecutive bullets are siblings
-            } else {
-              level = prevLevel + 1; // first bullet under a numbered/lettered item
-            }
-
-            if (level > maxLevel) maxLevel = level;
-            prevLevel = level;
-            prevWasBullet = bullet;
-
-            // Alignment = where this layer's number/bullet sits.
-            // It must equal the text indent of the layer directly above it.
-            // (Level 0 starts flush at the left margin.)
-            var alignment =
-              level === 0
-                ? 0
-                : typeof textIndentByLevel[level - 1] === "number"
-                ? textIndentByLevel[level - 1]
-                : 0; // no parent seen yet -> flush
-
-            // Dynamic buffer based on bullet vs number, and number length.
-            var buffer = computeBufferPoints(li.listString);
-
-            // Text indent = where this layer's text sits.
-            var textIndent = alignment + buffer;
-            textIndentByLevel[level] = textIndent;
-
-            // Any deeper levels recorded earlier are now stale (we've moved up
-            // or to a new branch); clear them so a later child recomputes
-            // against the current ancestry rather than an old sibling subtree.
-            for (var deeper in textIndentByLevel) {
-              if (Number(deeper) > level) {
-                delete textIndentByLevel[deeper];
-              }
-            }
-
-            // 4) Apply the hanging indent.
-            applyHangingIndent(items[i], alignment, textIndent);
-            aligned++;
           }
 
           // 5) Single sync to push all indentation changes at once.
           return context.sync().then(function () {
             var msg =
               "Aligned " +
-              aligned +
+              layout.aligned +
               " list paragraph" +
-              (aligned === 1 ? "" : "s") +
+              (layout.aligned === 1 ? "" : "s") +
               " across " +
-              (maxLevel + 1) +
+              (layout.maxLevel + 1) +
               " level" +
-              (maxLevel === 0 ? "" : "s") +
+              (layout.maxLevel === 0 ? "" : "s") +
               ".";
-            if (skipped > 0) {
+            if (layout.skipped > 0) {
               msg +=
                 "\nSkipped " +
-                skipped +
+                layout.skipped +
                 " non-list paragraph" +
-                (skipped === 1 ? "" : "s") +
+                (layout.skipped === 1 ? "" : "s") +
                 ".";
             }
-            setStatus(msg, aligned > 0 ? "ok" : "warn");
+            setStatus(msg, layout.aligned > 0 ? "ok" : "warn");
           });
         });
       });
@@ -251,12 +313,22 @@
     });
   }
 
-  // Expose helpers for potential unit testing without breaking the IIFE scope.
+  // Expose helpers + the pure algorithm for unit testing, without breaking the
+  // IIFE scope or the browser bootstrap above.
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       inchesToPoints: inchesToPoints,
       isBulletString: isBulletString,
       computeBufferPoints: computeBufferPoints,
+      computeLayout: computeLayout,
+      // Constants exposed so tests assert against the source of truth, not
+      // hard-coded magic numbers that would silently drift.
+      constants: {
+        POINTS_PER_INCH: POINTS_PER_INCH,
+        BULLET_BUFFER_INCHES: BULLET_BUFFER_INCHES,
+        NUMBER_BASE_INCHES: NUMBER_BASE_INCHES,
+        NUMBER_PER_CHAR_INCHES: NUMBER_PER_CHAR_INCHES,
+      },
     };
   }
 })();

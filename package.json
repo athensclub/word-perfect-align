@@ -7,6 +7,7 @@
     "certs": "office-addin-dev-certs install",
     "start": "office-addin-dev-certs install && node server.js",
     "serve": "node server.js",
+    "test": "node --test",
     "validate": "office-addin-manifest validate manifest.xml"
   },
   "devDependencies": {

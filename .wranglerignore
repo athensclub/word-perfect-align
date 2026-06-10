@@ -6,3 +6,6 @@ package-lock.json
 bun.lock
 bun.lockb
 README.md
+test/
+.gitignore
+.wranglerignore

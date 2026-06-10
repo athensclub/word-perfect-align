@@ -61,6 +61,21 @@ Validate the manifest any time with:
 npm run validate
 ```
 
+## Tests
+
+The alignment algorithm lives in a pure, side-effect-free function
+(`computeLayout` in `src/taskpane.js`) so it can be unit-tested without Office.
+Run the regression suite (Node's built-in runner — no dependencies):
+
+```bash
+npm test
+```
+
+Tests live in `test/taskpane.test.js` and cover bullet/number classification,
+the constant-gap buffer, perfect vertical alignment, orphan-bullet
+re-parenting, the hanging-indent math, and non-list edge cases. Run them before
+committing any change to the algorithm.
+
 ## Sideload in Word on the web (SharePoint / Microsoft 365)
 
 1. Make sure the dev server is running (`npm start`).
