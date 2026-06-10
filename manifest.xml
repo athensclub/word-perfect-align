@@ -2,7 +2,7 @@
 <!--
   Office Add-in manifest (XML / v1.1 schema) for a Word Task Pane add-in.
   Targets Word (desktop + Word on the web / SharePoint).
-  All resources are served from https://word-perfect-align.athens8292.workers.dev
+  All resources are served from https://word-perfect-align.kawinr.com
 -->
 <OfficeApp
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
@@ -18,9 +18,9 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Perfect Align" />
   <Description DefaultValue="Dynamically aligns mixed nested lists so each layer's bullet/number sits under the parent layer's text." />
-  <IconUrl DefaultValue="https://word-perfect-align.athens8292.workers.dev/assets/icon-32.png" />
-  <HighResolutionIconUrl DefaultValue="https://word-perfect-align.athens8292.workers.dev/assets/icon-80.png" />
-  <SupportUrl DefaultValue="https://word-perfect-align.athens8292.workers.dev/" />
+  <IconUrl DefaultValue="https://word-perfect-align.kawinr.com/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://word-perfect-align.kawinr.com/assets/icon-80.png" />
+  <SupportUrl DefaultValue="https://word-perfect-align.kawinr.com/" />
 
   <!-- Restrict the add-in to Word. -->
   <Hosts>
@@ -36,7 +36,7 @@
 
   <!-- Fallback task pane location for older clients. -->
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://word-perfect-align.athens8292.workers.dev/src/taskpane.html" />
+    <SourceLocation DefaultValue="https://word-perfect-align.kawinr.com/src/taskpane.html" />
   </DefaultSettings>
 
   <!-- Read + write the document so we can update paragraph indentation. -->
@@ -89,13 +89,13 @@
 
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16" DefaultValue="https://word-perfect-align.athens8292.workers.dev/assets/icon-16.png" />
-        <bt:Image id="Icon.32" DefaultValue="https://word-perfect-align.athens8292.workers.dev/assets/icon-32.png" />
-        <bt:Image id="Icon.80" DefaultValue="https://word-perfect-align.athens8292.workers.dev/assets/icon-80.png" />
+        <bt:Image id="Icon.16" DefaultValue="https://word-perfect-align.kawinr.com/assets/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://word-perfect-align.kawinr.com/assets/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://word-perfect-align.kawinr.com/assets/icon-80.png" />
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://word-perfect-align.athens8292.workers.dev/src/taskpane.html" />
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://word-perfect-align.athens8292.workers.dev/" />
+        <bt:Url id="Taskpane.Url" DefaultValue="https://word-perfect-align.kawinr.com/src/taskpane.html" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://word-perfect-align.kawinr.com/" />
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Perfect Align is ready." />
