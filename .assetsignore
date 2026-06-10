@@ -1,11 +1,13 @@
-node_modules/
-.git/
+node_modules
+.git
+test
 server.js
 package.json
 package-lock.json
 bun.lock
 bun.lockb
 README.md
-test/
 .gitignore
 .wranglerignore
+.assetsignore
+wrangler.toml
