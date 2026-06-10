@@ -27,12 +27,15 @@
   var POINTS_PER_INCH = 72;
 
   // Bullets ("•", "-", "▪", ...) get a small, fixed gap before their text.
-  var BULLET_BUFFER_INCHES = 0.25; // 18 pt
+  var BULLET_BUFFER_INCHES = 0.18; // ~13 pt — one tight step
 
-  // Numbered/lettered items ("1.", "1.1.1.", "a.") get a length-aware gap so a
-  // long string like "1.1.1.1.1." never crashes into its own text.
-  var NUMBER_BASE_INCHES = 0.3; // 21.6 pt baseline
-  var NUMBER_PER_CHAR_INCHES = 0.08; // +5.76 pt per character in the list string
+  // Numbered/lettered items ("1.", "1.1.1.", "a.") get a length-aware gap.
+  // NUMBER_PER_CHAR ≈ the rendered width of one number glyph, so the buffer
+  // grows just enough to clear the number string — which keeps the VISIBLE
+  // gap between the number and its text constant (== NUMBER_BASE) no matter how
+  // long the number is. NUMBER_BASE is therefore the actual "one step" gap.
+  var NUMBER_BASE_INCHES = 0.12; // ~9 pt — the constant gap after the number
+  var NUMBER_PER_CHAR_INCHES = 0.07; // ~5 pt/char ≈ glyph width at ~11pt font
 
   // ---------------------------------------------------------------------------
   // Office bootstrap
