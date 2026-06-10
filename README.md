@@ -10,17 +10,50 @@ paragraphs top-to-bottom, tracks the running text indent per level, and applies
 a clean hanging indent to each paragraph using the native
 `leftIndent` / `firstLineIndent` properties.
 
+## Add this add-in to Word Online
+
+The add-in is already hosted (at `https://word-perfect-align.kawinr.com`), so
+you only need the manifest file to sideload it — **no install or local server
+required**.
+
+1. **Download the manifest.** Open
+   [`manifest.xml`](manifest.xml) in this repo → click **Raw** → save the file
+   (right-click → *Save As*) as `manifest.xml`.
+2. **Open a document** in [Word on the web](https://www.office.com/launch/word)
+   (a SharePoint / OneDrive / Microsoft 365 document).
+3. On the **Home** tab, click **Add-ins** → **More Add-ins**
+   (or **Insert** → **Add-ins**).
+4. In the dialog, go to the **My Add-ins** tab → **Upload My Add-in**.
+5. Choose the `manifest.xml` you downloaded → **Upload**.
+6. A **Perfect Align** group appears on the **Home** tab. Click **Align Lists**
+   to open the task pane.
+
+**To use it:** select your nested list (and optionally set a starting indent —
+see *Usage* below), then click **Perfectly Align Selection**.
+
+> To remove or re-upload later: **Insert ▸ Add-ins ▸ My Add-ins**, then manage
+> it from there. Re-uploading the same `manifest.xml` replaces the old version.
+>
+> For org-wide rollout, deploy the manifest through the **Microsoft 365 admin
+> center ▸ Integrated apps** or your **SharePoint app catalog** (details under
+> *Sideload* below).
+
 ## How the alignment works
 
 For each selected paragraph (1 inch = 72 points):
 
 | Quantity | Rule |
 |---|---|
-| **Alignment** (number/bullet position) | `= textIndent` of the level directly above (`level − 1`). Level 0 → `0`. |
-| **Text buffer** (bullet) | `0.25 in` (18 pt), fixed. |
-| **Text buffer** (number/letter) | `(0.3 + 0.08 × charLength) in` — grows with the list string so `1.1.1.1.1.` never collides with its text. |
+| **Alignment** (number/bullet position) | `= textIndent` of the level directly above (`level − 1`). Level 0 → the starting indent (default `0`). |
+| **Text buffer** (bullet) | `0.11 in` (~8 pt), fixed. |
+| **Text buffer** (number/letter) | `(0.04 + 0.07 × charLength) in` — the per-char term tracks the glyph width so the visible gap stays a constant ~0.04 in even for long numbers like `1.1.1.1.1.`. |
 | **Text indent** (text position) | `= alignment + buffer`. |
 | Applied as | `leftIndent = textIndent`, `firstLineIndent = −(textIndent − alignment)`. |
+
+The outermost layer can be shifted to a **starting indent** (slider, or *Copy
+indent from selection* to match a heading); the whole list shifts with it while
+keeping every relative alignment. Bullets that Word reports at a shallow level
+are re-parented one layer below the item above them.
 
 Paragraphs that aren't part of a list are detected via `listItemOrNullObject`
 and left untouched.
@@ -109,4 +142,4 @@ committing any change to the algorithm.
 
 ## License
 
-[MIT](LICENSE) © 2026 athensclub
+[MIT](LICENSE) © 2026 Kawin Rattanapun

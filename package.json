@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Word Online add-in that dynamically aligns mixed nested lists so each layer's bullet/number sits under the parent layer's text.",
   "private": true,
+  "author": "Kawin Rattanapun",
   "license": "MIT",
   "scripts": {
     "certs": "office-addin-dev-certs install",
