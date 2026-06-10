@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perfect Align</title>
+
+  <!-- Office.js: must load from the Microsoft CDN, not bundled locally. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+  <style>
+    /* ---- Minimal Fluent UI styling (no framework needed) ---- */
+    :root {
+      --fluent-blue: #0078d4;
+      --fluent-blue-hover: #106ebe;
+      --fluent-blue-active: #005a9e;
+      --neutral-fg: #201f1e;
+      --neutral-fg-2: #605e5c;
+      --neutral-bg: #faf9f8;
+      --ok: #107c10;
+      --warn: #797673;
+      --err: #a4262c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--neutral-fg);
+      background: var(--neutral-bg);
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
+
+    p.subtitle {
+      margin: 0 0 20px;
+      color: var(--neutral-fg-2);
+      line-height: 1.4;
+    }
+
+    /* Fluent primary button */
+    button.fluent-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 40px;
+      padding: 0 20px;
+      border: 1px solid var(--fluent-blue);
+      border-radius: 2px;
+      background: var(--fluent-blue);
+      color: #fff;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.1s ease, border-color 0.1s ease;
+    }
+    button.fluent-primary:hover:not(:disabled) {
+      background: var(--fluent-blue-hover);
+      border-color: var(--fluent-blue-hover);
+    }
+    button.fluent-primary:active:not(:disabled) {
+      background: var(--fluent-blue-active);
+      border-color: var(--fluent-blue-active);
+    }
+    button.fluent-primary:disabled {
+      background: #c8c6c4;
+      border-color: #c8c6c4;
+      cursor: default;
+    }
+
+    /* Status / feedback region */
+    #status {
+      margin-top: 16px;
+      min-height: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    #status.ok   { color: var(--ok); }
+    #status.warn { color: var(--warn); }
+    #status.err  { color: var(--err); }
+
+    .hint {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #edebe9;
+      font-size: 12px;
+      color: var(--neutral-fg-2);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Perfect Align</h1>
+  <p class="subtitle">
+    Select a mixed nested list, then align every layer so its bullet or number
+    sits exactly under the text of the layer above it.
+  </p>
+
+  <button id="align-button" class="fluent-primary" disabled>
+    Perfectly Align Selection
+  </button>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <div class="hint">
+    Tip: Highlight all the list paragraphs you want to align before clicking.
+    Paragraphs that aren't part of a list are left untouched.
+  </div>
+
+  <!-- Add-in logic. -->
+  <script src="taskpane.js"></script>
+</body>
+</html>
