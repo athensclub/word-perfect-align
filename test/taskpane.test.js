@@ -228,20 +228,49 @@ test("computeLayout: a restart-numbered list nested under a bullet nests under i
   );
 });
 
-test("computeLayout: an ordinal whose number resets pops out one layer", () => {
-  // 2. -> • -> 1..5 (nested) -> 3. (number went 5->3 => outer list, pop out)
+test("computeLayout: an ordinal that continues an outer run returns to that run's level", () => {
+  // 2. -> • -> 1..5 (nested) -> 3. ("3" continues the outer "…2." run, not the
+  // inner "…5." one, so it pops all the way back out to level 0)
   const { results } = computeLayout([
-    num("2.", 0), // 0
+    num("2.", 0), // 0  (outer run: …2)
     bul("•", 0), // 1
-    num("1.", 0), // 2
+    num("1.", 0), // 2  (inner restart)
     num("2.", 0), // 2
-    num("5.", 0), // 2 (skipped ahead is still a continuation)
-    num("3.", 0), // 5 <= prev(5)? 3<=5 -> pop to 1
+    num("5.", 0), // 2  (inner run: …5)
+    num("3.", 0), // 3 > outer 2 -> continues the outer run -> 0
   ]);
   assert.deepEqual(
     results.map((r) => r.level),
-    [0, 1, 2, 2, 2, 1]
+    [0, 1, 2, 2, 2, 0]
   );
+});
+
+test("computeLayout: a numbered run continues at its own level across bullet runs", () => {
+  // The reported case: 3./4./5. each have bullets under them; 4 and 5 continue
+  // the run instead of nesting ever deeper under the preceding bullets.
+  const { results } = computeLayout([
+    num("3.", 0), // 0
+    bul("•", 0), // 1
+    bul("•", 0), // 1
+    num("4.", 0), // continues the …3 run -> 0
+    bul("•", 0), // 1
+    num("5.", 0), // continues the …4 run -> 0
+  ]);
+  assert.deepEqual(
+    results.map((r) => r.level),
+    [0, 1, 1, 0, 1, 0]
+  );
+});
+
+test("computeLayout: markerInk pulls the marker back without moving text or children", () => {
+  const plain = computeLayout([num("1.", 0)]).results[0];
+  const inked = computeLayout([
+    { isList: true, level: 0, listString: "1.", markerInk: 2 },
+  ]).results[0];
+  // Text position unchanged; only the marker hang grows by the ink inset.
+  assert.equal(inked.leftIndent, plain.leftIndent);
+  assert.ok(approx(inked.firstLineIndent, plain.firstLineIndent - 2));
+  assert.ok(approx(inked.textIndent, plain.textIndent));
 });
 
 test("computeLayout: ascending ordinals (even with a skip) stay siblings", () => {

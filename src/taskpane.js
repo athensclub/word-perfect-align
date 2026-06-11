@@ -90,6 +90,38 @@
   }
 
   /**
+   * Measure the ink inset (left side bearing) of a marker's first glyph, in
+   * points. Bullet glyphs like "•" carry noticeable blank space before their
+   * visible dot, so a marker box placed exactly at the parent's text start
+   * LOOKS shifted right; subtracting this inset aligns the visible ink instead
+   * of the invisible glyph box. Returns 0 when it can't be measured.
+   * @param {string} listString
+   * @param {string} [fontName]
+   * @param {number} [fontSizePt]
+   * @returns {number}
+   */
+  function measureMarkerInkLeftPt(listString, fontName, fontSizePt) {
+    if (!listString) return 0;
+    if (typeof document === "undefined" || !document.createElement) return 0;
+    if (!_measureCtx) {
+      var canvas = document.createElement("canvas");
+      _measureCtx = canvas.getContext("2d");
+    }
+    if (!_measureCtx) return 0;
+    var size = fontSizePt && fontSizePt > 0 ? fontSizePt : 11;
+    var family = fontName || "Calibri";
+    _measureCtx.font = size + 'pt "' + family + '"';
+    var m = _measureCtx.measureText(listString);
+    if (typeof m.actualBoundingBoxLeft !== "number") return 0;
+    // With left-aligned text the ink's left edge sits at -actualBoundingBoxLeft
+    // px right of the origin (the value is negative for a normal side bearing).
+    var insetPx = -m.actualBoundingBoxLeft;
+    if (!(insetPx > 0)) return 0;
+    var insetPt = insetPx * 0.75; // CSS px (96 dpi) -> points
+    return Math.min(insetPt, 6); // safety clamp for odd font metrics
+  }
+
+  /**
    * Ensure each CSS font spec ("11pt \"Aptos Display\"") is loaded before we
    * measure with the canvas — otherwise the first measureText() falls back to a
    * default font (wrong widths) and alignment would need a second click.
@@ -230,14 +262,16 @@
   }
 
   /**
-   * Apply a clean hanging indent to a paragraph.
-   *   leftIndent       = textIndent           (where the text sits)
-   *   firstLineIndent  = -(textIndent - align) (pulls the number/bullet back to `align`)
-   * Net effect: the number/bullet renders at `alignment`, text at `textIndent`.
+   * Apply a computed layout result to a paragraph as a clean hanging indent.
+   *   leftIndent      = textIndent (where the text sits)
+   *   firstLineIndent = negative hang pulling the marker's visible ink back to
+   *                     the alignment position (includes the ink-inset shift).
+   * @param {Word.Paragraph} paragraph
+   * @param {{leftIndent:number, firstLineIndent:number}} r
    */
-  function applyHangingIndent(paragraph, alignmentPoints, textIndentPoints) {
-    paragraph.leftIndent = textIndentPoints;
-    paragraph.firstLineIndent = -(textIndentPoints - alignmentPoints);
+  function applyHangingIndent(paragraph, r) {
+    paragraph.leftIndent = r.leftIndent;
+    paragraph.firstLineIndent = r.firstLineIndent;
   }
 
   // ---------------------------------------------------------------------------
@@ -247,13 +281,16 @@
   /**
    * Compute the indent layout for a list of paragraphs.
    *
-   * @param {Array<{isList:boolean, level?:number, listString?:string, markerWidth?:number}>} paras
+   * @param {Array<{isList:boolean, level?:number, listString?:string, markerWidth?:number, markerInk?:number}>} paras
    *        One entry per paragraph in document order. `isList:false` marks a
    *        non-list paragraph (left untouched; other fields omitted).
    *        `level` is Word's 0-indexed list level; `listString` is the rendered
    *        marker ("1.", "a.", "•"). `markerWidth` (points) is the measured
    *        width of that marker — when present, the buffer is markerWidth + a
    *        fixed gap (exact); when absent, a per-character estimate is used.
+   *        `markerInk` (points) is the marker glyph's ink inset (left side
+   *        bearing) — the marker is pulled back by this so its visible ink,
+   *        not its glyph box, sits at the alignment position.
    * @param {number} [baseIndent=0]
    *        Starting indent (points) for the outermost layer (level 0). The
    *        whole list shifts right by this amount, preserving relative
@@ -283,7 +320,10 @@
     var prevKind = null; // "hard" | "bullet" | "ordinal" (see classification below)
     var bulletRunAnchor = 0; // effective level the current bullet run started at
     var prevBulletWordLevel = 0; // Word's level for the previous bullet
-    var prevOrdinalValue = null; // numeric value of the previous ordinal (5 in "5.")
+    // Open numbered runs: effective level -> {value, letter} of the last ordinal
+    // seen there. Lets "4." return to the level of an open "…3." run even when
+    // a bullet run sits in between (continuation beats nesting).
+    var ordinalRunByLevel = {};
 
     for (var i = 0; i < paras.length; i++) {
       var p = paras[i];
@@ -310,6 +350,8 @@
         ? "hard"
         : "ordinal";
       var ordVal = kind === "ordinal" ? ordinalValue(p.listString) : null;
+      var ordIsLetter =
+        kind === "ordinal" && !/\d/.test((p.listString || "").trim());
 
       // Effective level:
       var level;
@@ -339,20 +381,29 @@
         }
       } else {
         // ordinal: single-segment number/letter ("1.", "2.", "a.").
-        if (prevKind === "ordinal") {
-          if (
-            ordVal !== null &&
-            prevOrdinalValue !== null &&
-            ordVal <= prevOrdinalValue
-          ) {
-            // The number reset/decreased (e.g. 5 -> 3): not a continuation of
-            // this run, so it belongs to an outer list -> pop out one layer.
-            level = prevLevel > 0 ? prevLevel - 1 : 0;
-          } else {
-            level = prevLevel; // ascending sequence -> sibling
+        // Continuation beats nesting: if this value extends an OPEN numbered
+        // run at some level (e.g. "4." while "…3." is still open, with a
+        // bullet run in between), return to that run's level — that's how
+        // 3./4./5. stay siblings even when each has bullets under it. Only a
+        // fresh restart (typically "1.") starts a new list nested one layer
+        // under whatever came before.
+        var contLevel = -1;
+        if (ordVal !== null) {
+          for (var lv in ordinalRunByLevel) {
+            var run = ordinalRunByLevel[lv];
+            if (
+              run.letter === ordIsLetter &&
+              ordVal > run.value &&
+              Number(lv) > contLevel
+            ) {
+              contLevel = Number(lv); // prefer the deepest continuing run
+            }
           }
-        } else if (prevKind === "bullet") {
-          level = prevLevel + 1; // a numbered list nested under a bullet
+        }
+        if (contLevel >= 0) {
+          level = contLevel;
+        } else if (prevKind === "bullet" || prevKind === "ordinal") {
+          level = prevLevel + 1; // restarted list -> nest under the item above
         } else {
           level = wordLevel; // after a dotted number / at the top -> trust Word
         }
@@ -361,7 +412,6 @@
       if (level > maxLevel) maxLevel = level;
       prevLevel = level;
       prevKind = kind;
-      if (kind === "ordinal") prevOrdinalValue = ordVal;
 
       // Alignment = where this layer's number/bullet sits.
       // It must equal the text indent of the layer directly above it.
@@ -393,14 +443,26 @@
           delete textIndentByLevel[deeper];
         }
       }
+      for (var deeperRun in ordinalRunByLevel) {
+        if (Number(deeperRun) > level) {
+          delete ordinalRunByLevel[deeperRun]; // runs deeper than us are closed
+        }
+      }
+      if (kind === "ordinal" && ordVal !== null) {
+        ordinalRunByLevel[level] = { value: ordVal, letter: ordIsLetter };
+      }
 
+      var markerInk =
+        typeof p.markerInk === "number" && p.markerInk > 0 ? p.markerInk : 0;
       results.push({
         level: level,
         isBullet: bullet,
         alignment: alignment,
         textIndent: textIndent,
         leftIndent: textIndent,
-        firstLineIndent: -(textIndent - alignment),
+        // Negative hang pulls the marker back so its visible INK (glyph box
+        // minus the ink inset) lands exactly at `alignment`.
+        firstLineIndent: alignment - markerInk - textIndent,
       });
       aligned++;
     }
@@ -568,6 +630,7 @@
                 level: li.level || 0,
                 listString: li.listString,
                 markerWidth: measureMarkerWidthPt(li.listString, font.name, font.size),
+                markerInk: measureMarkerInkLeftPt(li.listString, font.name, font.size),
               };
             });
 
@@ -577,7 +640,7 @@
             for (var i = 0; i < layout.results.length; i++) {
               var r = layout.results[i];
               if (r) {
-                applyHangingIndent(items[i], r.alignment, r.textIndent);
+                applyHangingIndent(items[i], r);
               }
             }
 

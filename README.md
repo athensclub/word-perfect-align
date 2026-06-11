@@ -60,10 +60,12 @@ unreliable levels: **dotted numbers** (`2.1.1.`) carry their own depth and are
 trusted; **bullets** are anchored one layer below the item they follow and then
 follow Word's level *delta* (sub-bullets nest, de-indented bullets pop out,
 floored at the anchor); **single-segment numbers** (`1.`, `a.`) are ambiguous
-(a restart list looks identical to a top-level one), so a numbered list that
-follows a bullet nests one layer under it, ascending numbers stay siblings, and
-a number that resets/decreases (e.g. `5.` then `3.`) pops out one layer as the
-start of an outer list.
+(a restart list looks identical to a top-level one), so the algorithm tracks
+*open numbered runs* per level: a value that continues an open run (`4.` while
+`…3.` is open — even with a bullet run in between) returns to that run's level,
+while a fresh restart (`1.`) nests one layer under the item it follows. Marker
+glyph ink insets are also measured, so a bullet's visible dot (not its glyph
+box) aligns optically with the parent's text.
 
 Paragraphs that aren't part of a list are detected via `listItemOrNullObject`
 and left untouched.
