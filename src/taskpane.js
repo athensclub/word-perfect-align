@@ -89,6 +89,30 @@
     return widthPx * 0.75; // CSS px (96 dpi) -> points (72 dpi)
   }
 
+  /**
+   * Ensure each CSS font spec ("11pt \"Aptos Display\"") is loaded before we
+   * measure with the canvas — otherwise the first measureText() falls back to a
+   * default font (wrong widths) and alignment would need a second click.
+   * @param {string[]} specs
+   * @returns {Promise<*>}
+   */
+  function ensureFontsLoaded(specs) {
+    if (typeof document === "undefined" || !document.fonts || !document.fonts.load) {
+      return Promise.resolve(); // older host: skip, measurement still approximates
+    }
+    try {
+      return Promise.all(
+        specs.map(function (spec) {
+          return document.fonts.load(spec).catch(function () {
+            return null; // a font that can't load just falls back gracefully
+          });
+        })
+      );
+    } catch (e) {
+      return Promise.resolve();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Office bootstrap
   // ---------------------------------------------------------------------------
@@ -457,54 +481,66 @@
         });
 
         return context.sync().then(function () {
-          // 3) Build a plain-data snapshot (measuring each marker's real width
-          //    in its own font), then run the pure layout algorithm from the
-          //    configured base indent.
-          var paras = listItems.map(function (li, idx) {
-            if (li.isNullObject) return { isList: false };
-            var font = items[idx].font;
-            return {
-              isList: true,
-              level: li.level || 0,
-              listString: li.listString,
-              markerWidth: measureMarkerWidthPt(li.listString, font.name, font.size),
-            };
+          // 3) Make sure every paragraph font is actually loaded in this pane
+          //    BEFORE measuring — otherwise the first measureText() uses a
+          //    fallback font (wrong widths) and alignment needs a second click.
+          var fontSpecs = {};
+          listItems.forEach(function (li, idx) {
+            if (li.isNullObject) return;
+            var f = items[idx].font;
+            var size = f.size && f.size > 0 ? f.size : 11;
+            fontSpecs[size + 'pt "' + (f.name || "Calibri") + '"'] = true;
           });
 
-          var layout = computeLayout(paras, baseIndentPoints);
+          return ensureFontsLoaded(Object.keys(fontSpecs)).then(function () {
+            // Build a plain-data snapshot (measuring each marker's real width in
+            // its own font), then run the pure layout algorithm from the base.
+            var paras = listItems.map(function (li, idx) {
+              if (li.isNullObject) return { isList: false };
+              var font = items[idx].font;
+              return {
+                isList: true,
+                level: li.level || 0,
+                listString: li.listString,
+                markerWidth: measureMarkerWidthPt(li.listString, font.name, font.size),
+              };
+            });
 
-          // 4) Apply the computed hanging indents back onto the paragraphs.
-          for (var i = 0; i < layout.results.length; i++) {
-            var r = layout.results[i];
-            if (r) {
-              applyHangingIndent(items[i], r.alignment, r.textIndent);
-            }
-          }
+            var layout = computeLayout(paras, baseIndentPoints);
 
-          // 5) Single sync to push all indentation changes at once.
-          return context.sync().then(function () {
-            if (silent) return;
-            var msg =
-              "Aligned " +
-              layout.aligned +
-              " list paragraph" +
-              (layout.aligned === 1 ? "" : "s") +
-              " across " +
-              (layout.maxLevel + 1) +
-              " level" +
-              (layout.maxLevel === 0 ? "" : "s") +
-              " (start " +
-              (baseIndentPoints / POINTS_PER_INCH).toFixed(2) +
-              '").';
-            if (layout.skipped > 0) {
-              msg +=
-                "\nSkipped " +
-                layout.skipped +
-                " non-list paragraph" +
-                (layout.skipped === 1 ? "" : "s") +
-                ".";
+            // 4) Apply the computed hanging indents back onto the paragraphs.
+            for (var i = 0; i < layout.results.length; i++) {
+              var r = layout.results[i];
+              if (r) {
+                applyHangingIndent(items[i], r.alignment, r.textIndent);
+              }
             }
-            setStatus(msg, layout.aligned > 0 ? "ok" : "warn");
+
+            // 5) Single sync to push all indentation changes at once.
+            return context.sync().then(function () {
+              if (silent) return;
+              var msg =
+                "Aligned " +
+                layout.aligned +
+                " list paragraph" +
+                (layout.aligned === 1 ? "" : "s") +
+                " across " +
+                (layout.maxLevel + 1) +
+                " level" +
+                (layout.maxLevel === 0 ? "" : "s") +
+                " (start " +
+                (baseIndentPoints / POINTS_PER_INCH).toFixed(2) +
+                '").';
+              if (layout.skipped > 0) {
+                msg +=
+                  "\nSkipped " +
+                  layout.skipped +
+                  " non-list paragraph" +
+                  (layout.skipped === 1 ? "" : "s") +
+                  ".";
+              }
+              setStatus(msg, layout.aligned > 0 ? "ok" : "warn");
+            });
           });
         });
       });
