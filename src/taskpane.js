@@ -37,8 +37,11 @@
   // that leftIndent ends up to the LEFT of where the text actually rendered.
   // (Aptos / display fonts have wide digits, so this is set generously.)
   // The VISIBLE gap stays ~= NUMBER_BASE regardless of number length.
-  var NUMBER_BASE_INCHES = 0.04; // ~3 pt — very tight gap after the number
-  var NUMBER_PER_CHAR_INCHES = 0.1; // ~7 pt/char — clears wide digits (e.g. Aptos)
+  var NUMBER_BASE_INCHES = 0.05; // ~3.5 pt — the (near-constant) gap after the number
+  var NUMBER_PER_CHAR_INCHES = 0.09; // ~6.5 pt/char ≈ Aptos digit width: tracks the
+  // glyph so the buffer just clears the number and the gap stays ~= NUMBER_BASE
+  // at every depth (no length-dependent growth), while still avoiding the
+  // text-drift that happens when the per-char allowance is too small.
 
   // The configurable starting indent for the outermost layer, in POINTS.
   // Driven by the slider / "copy from selection" controls in the task pane.

@@ -46,7 +46,7 @@ For each selected paragraph (1 inch = 72 points):
 |---|---|
 | **Alignment** (number/bullet position) | `= textIndent` of the level directly above (`level − 1`). Level 0 → the starting indent (default `0`). |
 | **Text buffer** (bullet) | `0.18 in` (~13 pt), fixed. |
-| **Text buffer** (number/letter) | `(0.04 + 0.10 × charLength) in` — the per-char term must exceed the glyph width so the buffer always clears the number (otherwise Word pushes the number's text past `leftIndent` and children misalign). The visible gap stays a constant ~0.04 in. |
+| **Text buffer** (number/letter) | `(0.05 + 0.09 × charLength) in` — the per-char term ≈ the glyph width so the buffer tracks (just clears) the number; too small and Word pushes the number's text past `leftIndent` and children misalign, too large and the gap grows with depth. The visible gap stays ~0.05 in at every depth. |
 | **Text indent** (text position) | `= alignment + buffer`. |
 | Applied as | `leftIndent = textIndent`, `firstLineIndent = −(textIndent − alignment)`. |
 
