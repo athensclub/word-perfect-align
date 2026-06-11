@@ -212,6 +212,43 @@ test("computeLayout: a leading bullet with no item above falls back to its Word 
   assert.equal(results[0].alignment, 0);
 });
 
+test("computeLayout: a restart-numbered list nested under a bullet nests under it", () => {
+  // The reported case: 2. -> • (bullet) -> 1./2./3. (restart numbers at Word 0)
+  // The inner numbers must sit one layer below the bullet, not jump to the top.
+  const { results } = computeLayout([
+    num("2.", 0), // ordinal, top level -> 0
+    bul("•", 0), // bullet under it -> 1
+    num("1.", 0), // ordinal after a bullet -> nests under it -> 2
+    num("2.", 0), // consecutive ordinal -> sibling -> 2
+    num("3.", 0), // sibling -> 2
+  ]);
+  assert.deepEqual(
+    results.map((r) => r.level),
+    [0, 1, 2, 2, 2]
+  );
+});
+
+test("computeLayout: top-level numbered siblings stay at the same level", () => {
+  const { results } = computeLayout([num("1.", 0), num("2.", 0), num("3.", 0)]);
+  assert.deepEqual(
+    results.map((r) => r.level),
+    [0, 0, 0]
+  );
+});
+
+test("computeLayout: multi-segment dotted numbers keep their reliable Word level", () => {
+  // A dotted number after a bullet is NOT re-parented — it trusts its own depth.
+  const { results } = computeLayout([
+    num("2.", 0),
+    bul("•", 0), // -> 1
+    num("2.1.", 1), // dotted (hard) -> trusts Word level 1, not nested under bullet
+  ]);
+  assert.deepEqual(
+    results.map((r) => r.level),
+    [0, 1, 1]
+  );
+});
+
 test("computeLayout: number after bullets returns to its own Word level", () => {
   const { results } = computeLayout([
     num("2.2.1.", 2),

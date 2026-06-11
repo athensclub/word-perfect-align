@@ -55,11 +55,13 @@ text always lands at `leftIndent`, so a child marker (aligned to that
 
 The outermost layer can be shifted to a **starting indent** (slider, or *Copy
 indent from selection* to match a heading); the whole list shifts with it while
-keeping every relative alignment. Bullets are handled specially: Word's
-absolute bullet level is unreliable (stray bullets often report level 0), so a
-bullet run is anchored one layer below the item it follows, and within the run
-the bullets follow Word's level *delta* — sub-bullets nest deeper and
-de-indented bullets pop back out, never shallower than the run's anchor.
+keeping every relative alignment. Markers are classified to handle Word's
+unreliable levels: **dotted numbers** (`2.1.1.`) carry their own depth and are
+trusted; **bullets** are anchored one layer below the item they follow and then
+follow Word's level *delta* (sub-bullets nest, de-indented bullets pop out,
+floored at the anchor); **single-segment numbers** (`1.`, `a.`) are ambiguous
+(a restart list looks identical to a top-level one), so a numbered list that
+follows a bullet nests one layer under it and consecutive numbers stay siblings.
 
 Paragraphs that aren't part of a list are detected via `listItemOrNullObject`
 and left untouched.

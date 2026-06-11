@@ -185,6 +185,19 @@
   }
 
   /**
+   * Count the numbering segments in a marker: "2.1.1." -> 3, "1." -> 1, "a." -> 1.
+   * Multi-segment (>= 2) dotted numbers encode their own depth and Word reports
+   * them reliably; single-segment markers ("1.", "a.") are ambiguous (a nested
+   * restart list looks identical to a top-level list — both report level 0).
+   * @param {string} listString
+   * @returns {number}
+   */
+  function listSegmentCount(listString) {
+    var groups = (listString || "").trim().match(/[0-9A-Za-z]+/g);
+    return groups ? groups.length : 0;
+  }
+
+  /**
    * Compute the dynamic text buffer (in points) that separates the
    * number/bullet position from the text start.
    *   - Bullet: fixed small buffer.
@@ -246,11 +259,11 @@
     var skipped = 0;
     var maxLevel = 0;
 
-    // Track the previous list item so we can re-parent "orphan" bullets.
-    // In chaotic docs, Word often reports stray bullets at level 0 even
-    // though they visually belong under the (deeper) item above them.
+    // Track the previous list item so we can re-parent "orphan" markers. In
+    // chaotic docs Word reports stray bullets AND restart-numbered lists at
+    // level 0 even though they visually belong under the (deeper) item above.
     var prevLevel = -1; // effective level of the previous list item
-    var prevWasBullet = false;
+    var prevKind = null; // "hard" | "bullet" | "ordinal" (see classification below)
     var bulletRunAnchor = 0; // effective level the current bullet run started at
     var prevBulletWordLevel = 0; // Word's level for the previous bullet
 
@@ -267,36 +280,58 @@
       var bullet = isBulletString(p.listString);
       var wordLevel = p.level || 0; // 0-indexed depth reported by Word
 
+      // Classify the marker:
+      //  - "hard"    : multi-segment dotted number ("2.1.1.") — encodes its own
+      //                depth and Word reports it reliably -> trust wordLevel.
+      //  - "bullet"  : a bullet symbol.
+      //  - "ordinal" : single-segment number/letter ("1.", "a.") — Word can't
+      //                tell a nested restart list from a top-level one (both 0).
+      var kind = bullet
+        ? "bullet"
+        : listSegmentCount(p.listString) >= 2
+        ? "hard"
+        : "ordinal";
+
       // Effective level:
-      //  - Numbers/letters: trust Word's level (it's reliable for them).
-      //  - Bullets: Word's ABSOLUTE bullet level is unreliable (stray bullets
-      //    often report level 0), but the level DELTA between consecutive
-      //    bullets is reliable. So:
-      //      * first bullet of a run  -> one layer below the item above
-      //        (the run "anchor"); record its Word level as the delta baseline.
-      //      * later bullets in a run -> follow Word's level delta, so sub-
-      //        bullets nest deeper and de-indented bullets pop back out — but
-      //        never shallower than the run anchor (stay within the parent).
       var level;
-      if (!bullet) {
+      if (prevLevel < 0) {
+        // First list item in the selection: trust Word's level.
         level = wordLevel;
-      } else if (prevLevel < 0) {
-        level = wordLevel; // first item in selection, nothing to nest under
-        bulletRunAnchor = level;
-        prevBulletWordLevel = wordLevel;
-      } else if (!prevWasBullet) {
-        level = prevLevel + 1; // first bullet under a numbered/lettered item
-        bulletRunAnchor = level;
-        prevBulletWordLevel = wordLevel;
+        if (bullet) {
+          bulletRunAnchor = level;
+          prevBulletWordLevel = wordLevel;
+        }
+      } else if (kind === "hard") {
+        level = wordLevel; // dotted numbers carry a reliable absolute level
+      } else if (kind === "bullet") {
+        // Word's ABSOLUTE bullet level is unreliable, but the DELTA between
+        // consecutive bullets is reliable:
+        //   * first bullet of a run  -> one layer below the item above (anchor)
+        //   * later bullets in a run -> follow the delta (sub-bullets nest,
+        //     de-indented bullets pop out) but never shallower than the anchor.
+        if (prevKind !== "bullet") {
+          level = prevLevel + 1;
+          bulletRunAnchor = level;
+          prevBulletWordLevel = wordLevel;
+        } else {
+          level = prevLevel + (wordLevel - prevBulletWordLevel);
+          if (level < bulletRunAnchor) level = bulletRunAnchor;
+          prevBulletWordLevel = wordLevel;
+        }
       } else {
-        level = prevLevel + (wordLevel - prevBulletWordLevel); // follow the delta
-        if (level < bulletRunAnchor) level = bulletRunAnchor; // floor at the anchor
-        prevBulletWordLevel = wordLevel;
+        // ordinal: single-segment number/letter ("1.", "2.", "a.").
+        if (prevKind === "ordinal") {
+          level = prevLevel; // consecutive 1, 2, 3 are siblings
+        } else if (prevKind === "bullet") {
+          level = prevLevel + 1; // a numbered list nested under a bullet
+        } else {
+          level = wordLevel; // after a dotted number / at the top -> trust Word
+        }
       }
 
       if (level > maxLevel) maxLevel = level;
       prevLevel = level;
-      prevWasBullet = bullet;
+      prevKind = kind;
 
       // Alignment = where this layer's number/bullet sits.
       // It must equal the text indent of the layer directly above it.
