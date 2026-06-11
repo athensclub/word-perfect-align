@@ -45,10 +45,13 @@ For each selected paragraph (1 inch = 72 points):
 | Quantity | Rule |
 |---|---|
 | **Alignment** (number/bullet position) | `= textIndent` of the level directly above (`level − 1`). Level 0 → the starting indent (default `0`). |
-| **Text buffer** (bullet) | `0.18 in` (~13 pt), fixed. |
-| **Text buffer** (number/letter) | `(0.05 + 0.09 × charLength) in` — the per-char term ≈ the glyph width so the buffer tracks (just clears) the number; too small and Word pushes the number's text past `leftIndent` and children misalign, too large and the gap grows with depth. The visible gap stays ~0.05 in at every depth. |
+| **Text buffer** (any marker) | `= measuredMarkerWidth + 0.07 in`. The marker's real pixel width is measured with a canvas in the paragraph's own font (via Office.js `font.name`/`font.size`), so the buffer exactly clears the marker and leaves one uniform `0.07 in` gap — identical for bullets and numbers, constant at every depth. *(Fallback when font info is unavailable: bullet `0.18 in`; number `0.05 + 0.09 × charLength in`.)* |
 | **Text indent** (text position) | `= alignment + buffer`. |
 | Applied as | `leftIndent = textIndent`, `firstLineIndent = −(textIndent − alignment)`. |
+
+Because the buffer is the *exact* marker width plus a fixed gap, the number's
+text always lands at `leftIndent`, so a child marker (aligned to that
+`leftIndent`) sits precisely under it — no per-font tuning, no drift.
 
 The outermost layer can be shifted to a **starting indent** (slider, or *Copy
 indent from selection* to match a heading); the whole list shifts with it while

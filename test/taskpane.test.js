@@ -223,6 +223,47 @@ test("computeLayout: number after bullets returns to its own Word level", () => 
 });
 
 // --------------------------------------------------------------------------
+// computeLayout — measured marker width (exact buffer)
+// --------------------------------------------------------------------------
+const mnum = (listString, level, markerWidth) => ({
+  isList: true,
+  level,
+  listString,
+  markerWidth,
+});
+
+test("computeLayout: with markerWidth, buffer = markerWidth + uniform gap", () => {
+  const gap = inchesToPoints(constants.MARKER_GAP_INCHES);
+  const { results } = computeLayout([mnum("1.", 0, 10)]);
+  // textIndent (level 0, base 0) = alignment(0) + buffer(markerWidth + gap)
+  assert.ok(approx(results[0].textIndent, 10 + gap));
+});
+
+test("computeLayout: the gap is uniform for a number and a bullet of any width", () => {
+  const gap = inchesToPoints(constants.MARKER_GAP_INCHES);
+  // A wide number and a narrow bullet both get exactly the same trailing gap.
+  const number = computeLayout([mnum("2.1.1.1.", 0, 52)]).results[0];
+  const bullet = computeLayout([mnum("•", 0, 5)]).results[0];
+  assert.ok(approx(number.textIndent - number.alignment - 52, gap));
+  assert.ok(approx(bullet.textIndent - bullet.alignment - 5, gap));
+});
+
+test("computeLayout: a measured child marker aligns exactly under the parent text", () => {
+  // Parent number measured at 52pt; its child bullet should sit at the parent's
+  // text start regardless of the parent marker's width.
+  const { results } = computeLayout([
+    mnum("2.1.1.1.", 3, 52), // some deep number
+    mnum("•", 0, 5), // orphan bullet -> child of the number
+  ]);
+  assert.ok(approx(results[1].alignment, results[0].textIndent));
+});
+
+test("computeLayout: markerWidth absent -> falls back to the per-char estimate", () => {
+  const withWidth = computeLayout([num("1.", 0)]).results[0]; // no markerWidth
+  assert.ok(approx(withWidth.textIndent, computeBufferPoints("1.")));
+});
+
+// --------------------------------------------------------------------------
 // computeLayout — starting (base) indent
 // --------------------------------------------------------------------------
 test("computeLayout: baseIndent shifts level 0 to the given start", () => {

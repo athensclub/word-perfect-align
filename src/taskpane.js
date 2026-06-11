@@ -27,21 +27,18 @@
   // ---------------------------------------------------------------------------
   var POINTS_PER_INCH = 72;
 
-  // Bullets ("•", "-", "▪", ...) get a small, fixed gap before their text.
-  var BULLET_BUFFER_INCHES = 0.18; // ~13 pt — comfortable gap after the bullet
+  // The single, uniform gap left after EVERY marker (bullet or number) before
+  // its text. When the marker width is measured exactly (see measureMarkerWidthPt),
+  // buffer = markerWidth + this gap — so the visible gap is identical for bullets
+  // and numbers and constant at every depth, and the buffer always just clears
+  // the marker (so a child item aligns exactly under the parent's text).
+  var MARKER_GAP_INCHES = 0.07; // ~5 pt
 
-  // Numbered/lettered items ("1.", "1.1.1.", "a.") get a length-aware gap.
-  // NUMBER_PER_CHAR must be >= the rendered width of one number glyph, so the
-  // buffer always CLEARS the number string. If it's too small, Word pushes the
-  // number's own text past our leftIndent — and any child item that aligns to
-  // that leftIndent ends up to the LEFT of where the text actually rendered.
-  // (Aptos / display fonts have wide digits, so this is set generously.)
-  // The VISIBLE gap stays ~= NUMBER_BASE regardless of number length.
-  var NUMBER_BASE_INCHES = 0.05; // ~3.5 pt — the (near-constant) gap after the number
-  var NUMBER_PER_CHAR_INCHES = 0.09; // ~6.5 pt/char ≈ Aptos digit width: tracks the
-  // glyph so the buffer just clears the number and the gap stays ~= NUMBER_BASE
-  // at every depth (no length-dependent growth), while still avoiding the
-  // text-drift that happens when the per-char allowance is too small.
+  // ---- Fallback estimate (used only when the marker width can't be measured,
+  // e.g. in the unit tests or if Office font info is unavailable) ----
+  var BULLET_BUFFER_INCHES = 0.18; // ~13 pt
+  var NUMBER_BASE_INCHES = 0.05; // ~3.5 pt
+  var NUMBER_PER_CHAR_INCHES = 0.09; // ~6.5 pt/char ≈ a wide digit
 
   // The configurable starting indent for the outermost layer, in POINTS.
   // Driven by the slider / "copy from selection" controls in the task pane.
@@ -59,6 +56,37 @@
   /** @param {string} id @returns {HTMLButtonElement} */
   function getButton(id) {
     return /** @type {HTMLButtonElement} */ (document.getElementById(id));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Marker width measurement — measure the EXACT rendered width of a list
+  // marker ("1.1.1.", "•", "a.") in the paragraph's own font, via a hidden
+  // canvas. This makes the buffer = real width + a fixed gap, so the gap is
+  // tight/uniform and child markers land precisely under the parent's text,
+  // regardless of font.
+  // ---------------------------------------------------------------------------
+  var _measureCtx = null;
+
+  /**
+   * @param {string} listString  the marker text (e.g. "2.1.1.", "•")
+   * @param {string} [fontName]   the paragraph font family (from Office.js)
+   * @param {number} [fontSizePt] the paragraph font size in points
+   * @returns {number|null} the marker width in POINTS, or null if it can't be measured
+   */
+  function measureMarkerWidthPt(listString, fontName, fontSizePt) {
+    if (!listString) return null;
+    if (typeof document === "undefined" || !document.createElement) return null;
+    if (!_measureCtx) {
+      var canvas = document.createElement("canvas");
+      _measureCtx = canvas.getContext("2d");
+    }
+    if (!_measureCtx) return null;
+    var size = fontSizePt && fontSizePt > 0 ? fontSizePt : 11;
+    var family = fontName || "Calibri";
+    // Canvas accepts pt units; measureText returns CSS px (96 dpi).
+    _measureCtx.font = size + 'pt "' + family + '"';
+    var widthPx = _measureCtx.measureText(listString).width;
+    return widthPx * 0.75; // CSS px (96 dpi) -> points (72 dpi)
   }
 
   // ---------------------------------------------------------------------------
@@ -165,11 +193,13 @@
   /**
    * Compute the indent layout for a list of paragraphs.
    *
-   * @param {Array<{isList:boolean, level?:number, listString?:string}>} paras
+   * @param {Array<{isList:boolean, level?:number, listString?:string, markerWidth?:number}>} paras
    *        One entry per paragraph in document order. `isList:false` marks a
-   *        non-list paragraph (left untouched; `level`/`listString` omitted).
+   *        non-list paragraph (left untouched; other fields omitted).
    *        `level` is Word's 0-indexed list level; `listString` is the rendered
-   *        marker ("1.", "a.", "•").
+   *        marker ("1.", "a.", "•"). `markerWidth` (points) is the measured
+   *        width of that marker — when present, the buffer is markerWidth + a
+   *        fixed gap (exact); when absent, a per-character estimate is used.
    * @param {number} [baseIndent=0]
    *        Starting indent (points) for the outermost layer (level 0). The
    *        whole list shifts right by this amount, preserving relative
@@ -254,8 +284,13 @@
           ? textIndentByLevel[level - 1]
           : base; // no parent seen yet -> fall back to the base indent
 
-      // Dynamic buffer based on bullet vs number, and number length.
-      var buffer = computeBufferPoints(p.listString);
+      // Buffer = where the text sits relative to the marker. When we have the
+      // marker's measured width, the buffer exactly clears it plus one fixed
+      // gap (uniform + precise); otherwise fall back to the per-char estimate.
+      var buffer =
+        typeof p.markerWidth === "number" && p.markerWidth >= 0
+          ? p.markerWidth + inchesToPoints(MARKER_GAP_INCHES)
+          : computeBufferPoints(p.listString);
 
       // Text indent = where this layer's text sits.
       var textIndent = alignment + buffer;
@@ -411,21 +446,29 @@
           return context.sync(); // nothing to do
         }
 
-        // 2) For every paragraph, load its list membership + level + string.
+        // 2) For every paragraph, load its list membership + level + string,
+        //    plus the font (name/size) so we can measure the marker width.
         //    listItemOrNullObject lets us skip non-list paragraphs gracefully.
         var listItems = items.map(function (p) {
           var li = p.listItemOrNullObject;
           li.load("level,listString");
+          p.font.load("name,size");
           return li;
         });
 
         return context.sync().then(function () {
-          // 3) Build a plain-data snapshot, then run the pure layout algorithm
-          //    starting from the configured base indent.
-          var paras = listItems.map(function (li) {
-            return li.isNullObject
-              ? { isList: false }
-              : { isList: true, level: li.level || 0, listString: li.listString };
+          // 3) Build a plain-data snapshot (measuring each marker's real width
+          //    in its own font), then run the pure layout algorithm from the
+          //    configured base indent.
+          var paras = listItems.map(function (li, idx) {
+            if (li.isNullObject) return { isList: false };
+            var font = items[idx].font;
+            return {
+              isList: true,
+              level: li.level || 0,
+              listString: li.listString,
+              markerWidth: measureMarkerWidthPt(li.listString, font.name, font.size),
+            };
           });
 
           var layout = computeLayout(paras, baseIndentPoints);
@@ -492,6 +535,7 @@
       // hard-coded magic numbers that would silently drift.
       constants: {
         POINTS_PER_INCH: POINTS_PER_INCH,
+        MARKER_GAP_INCHES: MARKER_GAP_INCHES,
         BULLET_BUFFER_INCHES: BULLET_BUFFER_INCHES,
         NUMBER_BASE_INCHES: NUMBER_BASE_INCHES,
         NUMBER_PER_CHAR_INCHES: NUMBER_PER_CHAR_INCHES,
