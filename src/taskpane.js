@@ -318,8 +318,11 @@
     // level 0 even though they visually belong under the (deeper) item above.
     var prevLevel = -1; // effective level of the previous list item
     var prevKind = null; // "hard" | "bullet" | "ordinal" (see classification below)
-    var bulletRunAnchor = 0; // effective level the current bullet run started at
-    var prevBulletWordLevel = 0; // Word's level for the previous bullet
+    // A bullet run is anchored one level below the item it follows; within the
+    // run we TRUST Word's ilvl relative to that anchor (deeper ilvl -> deeper,
+    // shallower -> outward). bulletRunBase maps Word ilvl -> effective level.
+    var bulletRunBase = 0; // effectiveLevel = bulletRunBase + wordLevel
+    var bulletRunParentLevel = 0; // floor: don't outdent past the run's parent
     // Open numbered runs: effective level -> {value, letter} of the last ordinal
     // seen there. Lets "4." return to the level of an open "…3." run even when
     // a bullet run sits in between (continuation beats nesting).
@@ -359,25 +362,27 @@
         // First list item in the selection: trust Word's level.
         level = wordLevel;
         if (bullet) {
-          bulletRunAnchor = level;
-          prevBulletWordLevel = wordLevel;
+          bulletRunBase = 0; // first item: effective level == its own ilvl
+          bulletRunParentLevel = 0;
         }
       } else if (kind === "hard") {
         level = wordLevel; // dotted numbers carry a reliable absolute level
       } else if (kind === "bullet") {
-        // Word's ABSOLUTE bullet level is unreliable, but the DELTA between
-        // consecutive bullets is reliable:
-        //   * first bullet of a run  -> one layer below the item above (anchor)
-        //   * later bullets in a run -> follow the delta (sub-bullets nest,
-        //     de-indented bullets pop out) but never shallower than the anchor.
+        // Trust Word's ilvl, but relative to where the bullet run starts:
+        //   * first bullet of a run -> one layer below the item above; this
+        //     fixes the anchor and maps the bullet's ilvl onto it.
+        //   * later bullets -> bulletRunBase + their ilvl, so a deeper ilvl
+        //     nests and a shallower one (e.g. an "o" list at ilvl 0 after a
+        //     "•" at ilvl 1) moves outward — without ever outdenting past the
+        //     item the run hangs under.
         if (prevKind !== "bullet") {
           level = prevLevel + 1;
-          bulletRunAnchor = level;
-          prevBulletWordLevel = wordLevel;
+          bulletRunBase = level - wordLevel;
+          bulletRunParentLevel = prevLevel;
         } else {
-          level = prevLevel + (wordLevel - prevBulletWordLevel);
-          if (level < bulletRunAnchor) level = bulletRunAnchor;
-          prevBulletWordLevel = wordLevel;
+          level = bulletRunBase + wordLevel;
+          if (level < bulletRunParentLevel) level = bulletRunParentLevel;
+          if (level < 0) level = 0;
         }
       } else {
         // ordinal: single-segment number/letter ("1.", "2.", "a.").

@@ -57,9 +57,10 @@ The outermost layer can be shifted to a **starting indent** (slider, or *Copy
 indent from selection* to match a heading); the whole list shifts with it while
 keeping every relative alignment. Markers are classified to handle Word's
 unreliable levels: **dotted numbers** (`2.1.1.`) carry their own depth and are
-trusted; **bullets** are anchored one layer below the item they follow and then
-follow Word's level *delta* (sub-bullets nest, de-indented bullets pop out,
-floored at the anchor); **single-segment numbers** (`1.`, `a.`) are ambiguous
+trusted; **bullets** are anchored one layer below the item they follow, then
+trust Word's ilvl *relative to that anchor* — a deeper ilvl nests, a shallower
+one (e.g. an `o` list at ilvl 0 after a `•` at ilvl 1) moves outward — without
+outdenting past the run's parent; **single-segment numbers** (`1.`, `a.`) are ambiguous
 (a restart list looks identical to a top-level one), so the algorithm tracks
 *open numbered runs* per level: a value that continues an open run (`4.` while
 `…3.` is open — even with a bullet run in between) returns to that run's level,
