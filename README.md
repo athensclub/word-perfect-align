@@ -57,10 +57,11 @@ A **starting-indent** slider live-*translates* the whole selection left/right �
 it shifts only each paragraph's `leftIndent` (its starting position) and leaves
 the relative/hanging indents untouched, so it never re-flows a layout you've
 already tuned. *Copy indent from selection* reads a heading's indent into the
-slider. A **Paragraph style** dropdown applies a built-in style (Normal,
-Heading 1–4, Title, Subtitle) while *preserving* the selection's indent and
-list — it snapshots the indents, applies the style, then restores them (Word's
-own style apply would reset them). Markers are classified to handle Word's
+slider. A **Paragraph style** dropdown lists every paragraph style defined in
+the document (read via `Document.getStyles`, used styles first) and applies the
+chosen one while *preserving* the selection's indent and list — it snapshots the
+indents, applies the style, then restores them (Word's own style apply would
+reset them). Markers are classified to handle Word's
 unreliable levels: **dotted numbers** (`2.1.1.`) carry their own depth and are
 trusted; **bullets** are anchored one layer below the item they follow, then
 trust Word's ilvl *relative to that anchor* — a deeper ilvl nests, a shallower

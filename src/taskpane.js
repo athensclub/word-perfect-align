@@ -191,6 +191,7 @@
               styleSelect.value = ""; // reset to the placeholder
             }
           });
+          populateStyleDropdown(); // fill with the document's actual styles
         }
 
         updateIndentLabel();
@@ -747,28 +748,65 @@
     });
   }
 
-  // Friendly labels for the built-in style names used by the dropdown.
-  var STYLE_LABELS = {
-    Normal: "Normal text",
-    Heading1: "Heading 1",
-    Heading2: "Heading 2",
-    Heading3: "Heading 3",
-    Heading4: "Heading 4",
-    Title: "Title",
-    Subtitle: "Subtitle",
-  };
+  /**
+   * Populate the style dropdown with EVERY paragraph style defined in the
+   * document (via Document.getStyles), used styles first. Falls back to the
+   * static built-in options already in the HTML if getStyles is unavailable.
+   */
+  function populateStyleDropdown() {
+    var select = /** @type {HTMLSelectElement} */ (
+      document.getElementById("style-select")
+    );
+    if (!select || typeof Word === "undefined" || !Word.run) return;
+    // getStyles needs WordApi 1.5; if absent, keep the static fallback list.
+    try {
+      if (
+        Office.context &&
+        Office.context.requirements &&
+        !Office.context.requirements.isSetSupported("WordApi", "1.5")
+      ) {
+        return;
+      }
+    } catch (e) {
+      /* ignore and try anyway */
+    }
+
+    Word.run(function (context) {
+      var styles = context.document.getStyles();
+      styles.load("nameLocal,type,inUse");
+      return context.sync().then(function () {
+        var paras = styles.items.filter(function (s) {
+          return s.type === Word.StyleType.paragraph;
+        });
+        // In-use styles first, then alphabetical by display name.
+        paras.sort(function (a, b) {
+          if (a.inUse !== b.inUse) return a.inUse ? -1 : 1;
+          return a.nameLocal.localeCompare(b.nameLocal);
+        });
+        // Rebuild options, keeping the first (placeholder) one.
+        while (select.options.length > 1) select.remove(1);
+        paras.forEach(function (s) {
+          var opt = document.createElement("option");
+          opt.value = s.nameLocal;
+          opt.textContent = s.nameLocal + (s.inUse ? "" : " (unused)");
+          select.appendChild(opt);
+        });
+      });
+    }).catch(function (e) {
+      console.warn("getStyles unavailable; using built-in style list", e);
+    });
+  }
 
   /**
-   * Apply a built-in paragraph style to the selection while PRESERVING each
-   * paragraph's indent and list. Word's built-in style apply resets indentation
-   * (and can drop numbering); here we snapshot leftIndent/firstLineIndent, set
-   * the style, then restore them. Direct list numbering/bullets are kept across
-   * a programmatic style change, so the markers stay.
-   * @param {string} styleName a Word.BuiltInStyleName value, e.g. "Heading1"
+   * Apply a paragraph style (by its display name) to the selection while
+   * PRESERVING each paragraph's indent and list. Word's built-in style apply
+   * resets indentation (and can drop numbering); here we snapshot
+   * leftIndent/firstLineIndent, set the style, then restore them. Direct list
+   * numbering/bullets are kept across a programmatic style change.
+   * @param {string} styleName the style's display name (Style.nameLocal)
    */
   function applyStylePreservingFormat(styleName) {
-    var label = STYLE_LABELS[styleName] || styleName;
-    setStatus("Applying " + label + "…", "");
+    setStatus("Applying " + styleName + "…", "");
     Word.run(function (context) {
       var paragraphs = context.document.getSelection().paragraphs;
       paragraphs.load("items");
@@ -786,9 +824,9 @@
           var saved = items.map(function (p) {
             return { left: p.leftIndent || 0, first: p.firstLineIndent || 0 };
           });
-          // 2) Apply the style.
+          // 2) Apply the style by name.
           items.forEach(function (p) {
-            p.styleBuiltIn = /** @type {Word.BuiltInStyleName} */ (styleName);
+            p.style = styleName;
           });
           return context.sync().then(function () {
             // 3) Restore the indents (numbering/bullets are kept automatically).
@@ -799,7 +837,7 @@
             return context.sync().then(function () {
               setStatus(
                 "Applied " +
-                  label +
+                  styleName +
                   " to " +
                   items.length +
                   " paragraph" +

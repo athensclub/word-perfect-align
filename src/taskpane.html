@@ -216,14 +216,16 @@
     <div class="label-row">
       <label for="style-select">Paragraph style</label>
     </div>
-    <!-- Applies a built-in style but restores indent + keeps the list. -->
+    <!-- Populated at runtime with the document's actual styles; applies a
+         style but restores indent + keeps the list. The options below are a
+         fallback used only if the document's styles can't be read. -->
     <select id="style-select" aria-label="Apply paragraph style">
       <option value="">Set style…</option>
-      <option value="Normal">Normal text</option>
-      <option value="Heading1">Heading 1</option>
-      <option value="Heading2">Heading 2</option>
-      <option value="Heading3">Heading 3</option>
-      <option value="Heading4">Heading 4</option>
+      <option value="Normal">Normal</option>
+      <option value="Heading 1">Heading 1</option>
+      <option value="Heading 2">Heading 2</option>
+      <option value="Heading 3">Heading 3</option>
+      <option value="Heading 4">Heading 4</option>
       <option value="Title">Title</option>
       <option value="Subtitle">Subtitle</option>
     </select>
