@@ -179,6 +179,20 @@
           copyBtn.addEventListener("click", copyIndentFromSelection);
         }
 
+        // Paragraph-style dropdown: apply a built-in style while preserving the
+        // selection's indent and list (unlike Word's built-in apply).
+        var styleSelect = /** @type {HTMLSelectElement} */ (
+          document.getElementById("style-select")
+        );
+        if (styleSelect) {
+          styleSelect.addEventListener("change", function () {
+            if (styleSelect.value) {
+              applyStylePreservingFormat(styleSelect.value);
+              styleSelect.value = ""; // reset to the placeholder
+            }
+          });
+        }
+
         updateIndentLabel();
       }
     });
@@ -731,6 +745,73 @@
       lastShiftPoints = baseIndentPoints;
       if (!silent) button.disabled = false;
     });
+  }
+
+  // Friendly labels for the built-in style names used by the dropdown.
+  var STYLE_LABELS = {
+    Normal: "Normal text",
+    Heading1: "Heading 1",
+    Heading2: "Heading 2",
+    Heading3: "Heading 3",
+    Heading4: "Heading 4",
+    Title: "Title",
+    Subtitle: "Subtitle",
+  };
+
+  /**
+   * Apply a built-in paragraph style to the selection while PRESERVING each
+   * paragraph's indent and list. Word's built-in style apply resets indentation
+   * (and can drop numbering); here we snapshot leftIndent/firstLineIndent, set
+   * the style, then restore them. Direct list numbering/bullets are kept across
+   * a programmatic style change, so the markers stay.
+   * @param {string} styleName a Word.BuiltInStyleName value, e.g. "Heading1"
+   */
+  function applyStylePreservingFormat(styleName) {
+    var label = STYLE_LABELS[styleName] || styleName;
+    setStatus("Applying " + label + "…", "");
+    Word.run(function (context) {
+      var paragraphs = context.document.getSelection().paragraphs;
+      paragraphs.load("items");
+      return context.sync().then(function () {
+        var items = paragraphs.items;
+        if (!items || items.length === 0) {
+          setStatus("No text is selected. Highlight some paragraphs first.", "warn");
+          return context.sync();
+        }
+        // 1) Snapshot the indents the style is about to override.
+        items.forEach(function (p) {
+          p.load("leftIndent,firstLineIndent");
+        });
+        return context.sync().then(function () {
+          var saved = items.map(function (p) {
+            return { left: p.leftIndent || 0, first: p.firstLineIndent || 0 };
+          });
+          // 2) Apply the style.
+          items.forEach(function (p) {
+            p.styleBuiltIn = /** @type {Word.BuiltInStyleName} */ (styleName);
+          });
+          return context.sync().then(function () {
+            // 3) Restore the indents (numbering/bullets are kept automatically).
+            items.forEach(function (p, i) {
+              p.leftIndent = saved[i].left;
+              p.firstLineIndent = saved[i].first;
+            });
+            return context.sync().then(function () {
+              setStatus(
+                "Applied " +
+                  label +
+                  " to " +
+                  items.length +
+                  " paragraph" +
+                  (items.length === 1 ? "" : "s") +
+                  ", keeping indent and list.",
+                "ok"
+              );
+            });
+          });
+        });
+      });
+    }).catch(reportError);
   }
 
   /** Shared error reporter for Office/OfficeExtension failures. */

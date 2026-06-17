@@ -128,6 +128,27 @@
       accent-color: var(--fluent-blue);
       cursor: pointer;
     }
+    /* Fluent-style dropdown */
+    select#style-select {
+      width: 100%;
+      min-height: 32px;
+      padding: 4px 8px;
+      border: 1px solid #8a8886;
+      border-radius: 2px;
+      background: #fff;
+      color: var(--neutral-fg);
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    select#style-select:hover {
+      border-color: var(--neutral-fg);
+    }
+    select#style-select:focus {
+      outline: 2px solid var(--fluent-blue);
+      outline-offset: -1px;
+    }
+
     /* Secondary (outline) button */
     button.fluent-secondary {
       display: inline-flex;
@@ -189,6 +210,23 @@
     <button id="copy-indent-button" class="fluent-secondary" type="button">
       Copy indent from selection
     </button>
+  </div>
+
+  <div class="control-group">
+    <div class="label-row">
+      <label for="style-select">Paragraph style</label>
+    </div>
+    <!-- Applies a built-in style but restores indent + keeps the list. -->
+    <select id="style-select" aria-label="Apply paragraph style">
+      <option value="">Set style…</option>
+      <option value="Normal">Normal text</option>
+      <option value="Heading1">Heading 1</option>
+      <option value="Heading2">Heading 2</option>
+      <option value="Heading3">Heading 3</option>
+      <option value="Heading4">Heading 4</option>
+      <option value="Title">Title</option>
+      <option value="Subtitle">Subtitle</option>
+    </select>
   </div>
 
   <button id="align-button" class="fluent-primary" disabled>
