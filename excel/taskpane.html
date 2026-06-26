@@ -56,10 +56,19 @@
     Set all sheets to Aptos Display 11
   </button>
 
+  <button id="regen-index-button" class="fluent-primary" disabled style="margin-top: 10px;">
+    Re-generate Index sheet
+  </button>
+
   <div id="status" role="status" aria-live="polite"></div>
 
   <div class="hint">
-    Applies to all cells on every tab in this workbook — no selection needed.
+    <strong>Set font</strong> applies Aptos Display 11 to all cells on every tab.
+    <br /><br />
+    <strong>Re-generate Index</strong> rebuilds the <em>Index</em> sheet:
+    every tab in order (except Index and Status) with a link to it and a status
+    of <em>Done</em> (no “Pending” and at least one “Confirm” in its Status
+    column) or <em>Pending</em>.
   </div>
 
   <script src="taskpane.js"></script>

@@ -195,9 +195,17 @@ npm run icons
 A separate, minimal **Excel** add-in lives alongside this one (same hosting):
 
 - `manifest-excel.xml` — Excel (`Workbook`) manifest.
-- `excel/taskpane.html` + `excel/taskpane.js` — one button, **"Set all sheets
-  to Aptos Display 11"**, which walks every worksheet tab and sets all cells'
-  font to *Aptos Display*, size *11* (`worksheet.getRange()` = entire sheet).
+- `excel/taskpane.html` + `excel/taskpane.js` — two buttons:
+  - **"Set all sheets to Aptos Display 11"** — walks every worksheet tab and
+    sets all cells' font to *Aptos Display*, size *11* (`worksheet.getRange()`
+    = entire sheet).
+  - **"Re-generate Index sheet"** — rebuilds the *Index* sheet: every tab in
+    order (excluding *Index* and *Status*) as `No | Sheet | Link | Status`,
+    where *Link* is an internal hyperlink to that sheet's `A1`, and *Status* is
+    computed from the sheet's own Status column — *Done* if it has no "Pending"
+    and at least one "Confirm", else *Pending*. The Status column is located by
+    its "Status" header, so it works even though each sheet's table starts at a
+    different row (to leave room for the screenshot).
 
 Sideload it the same way, in **Excel on the web**: open a workbook → **Home ▸
 Add-ins ▸ Upload My Add-in** → choose `manifest-excel.xml`.
