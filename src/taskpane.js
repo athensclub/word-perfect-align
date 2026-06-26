@@ -201,6 +201,18 @@
           highlightBtn.addEventListener("click", highlightTbc);
         }
 
+        // "Renumber error IDs": find every error-handling table and reset its
+        // Error ID to {prefix}-{n} in document order.
+        var renumberBtn = document.getElementById("renumber-errors-button");
+        if (renumberBtn) {
+          renumberBtn.addEventListener("click", function () {
+            var input = /** @type {HTMLInputElement} */ (
+              document.getElementById("error-prefix")
+            );
+            renumberErrorIds(input ? input.value : "");
+          });
+        }
+
         updateIndentLabel();
       }
     });
@@ -957,6 +969,65 @@
               : "No “(TBC)” found in the document.",
             count > 0 ? "ok" : "warn"
           );
+        });
+      });
+    }).catch(reportError);
+  }
+
+  /**
+   * Find every error-handling table (one whose first cell reads "Error ID")
+   * and reset its Error ID value (the cell to the right) to {prefix}-{n},
+   * numbered from 1 in document order.
+   * @param {string} prefixRaw
+   */
+  function renumberErrorIds(prefixRaw) {
+    var prefix = (prefixRaw || "").trim();
+    if (!prefix) {
+      setStatus("Enter an error ID prefix first.", "warn");
+      return;
+    }
+    setStatus("Renumbering error IDs…", "");
+    Word.run(function (context) {
+      var tables = context.document.body.tables;
+      tables.load("items");
+      return context.sync().then(function () {
+        var items = tables.items;
+        items.forEach(function (t) {
+          t.load("values");
+        });
+        return context.sync().then(function () {
+          var n = 0;
+          items.forEach(function (t) {
+            var v = t.values;
+            var isErrorTable =
+              v &&
+              v[0] &&
+              v[0].length >= 2 &&
+              typeof v[0][0] === "string" &&
+              v[0][0].trim().toLowerCase() === "error id";
+            if (isErrorTable) {
+              n++;
+              t.getCell(0, 1).value = prefix + "-" + n;
+            }
+          });
+          return context.sync().then(function () {
+            setStatus(
+              n > 0
+                ? "Renumbered " +
+                    n +
+                    " error table" +
+                    (n === 1 ? "" : "s") +
+                    " as " +
+                    prefix +
+                    "-1 … " +
+                    prefix +
+                    "-" +
+                    n +
+                    "."
+                : "No error-handling tables (a cell reading “Error ID”) were found.",
+              n > 0 ? "ok" : "warn"
+            );
+          });
         });
       });
     }).catch(reportError);

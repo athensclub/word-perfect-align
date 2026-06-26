@@ -64,7 +64,10 @@ snapshots each paragraph's list (id + level) and indents, applies the style,
 then re-attaches the list if the style dropped it (restoring style-linked
 heading numbers like `4.1.` and their indent) and restores direct indents
 otherwise. A **Highlight all "(TBC)"** button scans the whole document body and
-applies a yellow highlight to every `(TBC)` occurrence. Markers are classified
+applies a yellow highlight to every `(TBC)` occurrence. A **Renumber error IDs**
+tool (with a prefix input) finds every error-handling table — any table whose
+first cell reads "Error ID" — and rewrites its Error ID value (the cell to the
+right) to `{prefix}-{n}`, numbered from 1 in document order. Markers are classified
 to handle Word's
 unreliable levels: **dotted numbers** (`2.1.1.`) carry their own depth and are
 trusted; **bullets** are anchored one layer below the item they follow, then
