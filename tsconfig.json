@@ -17,5 +17,5 @@
     "strictNullChecks": false,
     "types": ["office-js", "node"]
   },
-  "include": ["src/**/*.js", "test/**/*.js"]
+  "include": ["src/**/*.js", "test/**/*.js", "excel/**/*.js"]
 }

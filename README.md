@@ -190,6 +190,18 @@ Regenerate the PNGs after editing either SVG (macOS; uses QuickLook + sips):
 npm run icons
 ```
 
+## Excel companion: Sheet Font Setter
+
+A separate, minimal **Excel** add-in lives alongside this one (same hosting):
+
+- `manifest-excel.xml` — Excel (`Workbook`) manifest.
+- `excel/taskpane.html` + `excel/taskpane.js` — one button, **"Set all sheets
+  to Aptos Display 11"**, which walks every worksheet tab and sets all cells'
+  font to *Aptos Display*, size *11* (`worksheet.getRange()` = entire sheet).
+
+Sideload it the same way, in **Excel on the web**: open a workbook → **Home ▸
+Add-ins ▸ Upload My Add-in** → choose `manifest-excel.xml`.
+
 ## License
 
 [MIT](LICENSE) © 2026 Kawin Rattanapun
